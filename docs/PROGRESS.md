@@ -21,7 +21,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
 | History | B06–B07 | B06–B07 verified | Offline CLI, SQLite reopen, and resumed request checks |
 | Local worker | B08–B09 | B08 and B09 verified | Qwen passed three extraction smoke cases. 36 offline tests passed. |
-| Memory controls | B10–B11 | Not started | — |
+| Memory controls | B10–B11 | B10 candidate review verified offline | SQLite migration, approval/rejection, local CLI dispatch |
 | Retrieval | B12–B13 | Not started | — |
 | Automatic memory | B14–B15 | Not started | — |
 | Release | B16–B17 | Not started | — |
@@ -128,3 +128,12 @@ bounded admission, retries, and expiring claims. Candidate results are linked
 to their source turns. Offline checks covered history migration, chat while
 extraction waits, offline retries, restart recovery, and stale results.
 Live worker check passed in the user terminal. The queue started empty. After four replies, three jobs were completed, one was running, and none had failed. This verifies job processing alongside chat. Candidate contents were not inspected. Next: B10 memory controls.
+
+### B10 candidate review
+
+SQLite schema v3 backfills completed worker results into individual candidate
+rows with turn provenance, review state, and review timestamp. New results
+create candidate rows in the same transaction that completes the job.
+The CLI exposes pending and approved items and changes review state locally.
+37 offline tests passed. They cover backfill, provenance, review persistence,
+and idempotent job completion. Editing, deletion, and retrieval remain open.

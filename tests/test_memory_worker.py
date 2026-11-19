@@ -93,6 +93,7 @@ class MemoryWorkerTests(unittest.TestCase):
             session_id, turn = original.start_turn(None, "stored message")
             original.finish_turn(turn, "completed", "stored reply")
             with closing(sqlite3.connect(path)) as db, db:
+                db.execute("DROP TABLE memory_candidates")
                 db.execute("DROP TABLE memory_jobs")
                 db.execute("PRAGMA user_version = 1")
             migrated = History(path)

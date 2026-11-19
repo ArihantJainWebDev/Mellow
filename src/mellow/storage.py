@@ -2,11 +2,12 @@
 
 from contextlib import closing
 from pathlib import Path
+import json
 import sqlite3
 import time
 from uuid import uuid4
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -52,7 +53,26 @@ class History:
                     )
                 """)
                 db.execute("CREATE INDEX memory_jobs_ready ON memory_jobs(status, ready_at)")
-                db.execute("PRAGMA user_version = 2")
+                version = 2
+            if version == 2:
+                db.execute("""
+                    CREATE TABLE memory_candidates (
+                        id INTEGER PRIMARY KEY,
+                        turn_id INTEGER NOT NULL REFERENCES turns(id) ON DELETE CASCADE,
+                        kind TEXT NOT NULL CHECK (kind IN ('fact', 'episode')),
+                        text TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending'
+                            CHECK (status IN ('pending', 'approved', 'rejected')),
+                        reviewed_at TEXT
+                    )
+                """)
+                db.execute("CREATE INDEX memory_candidates_status ON memory_candidates(status, id)")
+                for turn_id, result in db.execute("""
+                    SELECT turn_id, result FROM memory_jobs
+                    WHERE status = 'completed' AND result IS NOT NULL
+                """):
+                    self._insert_candidates(db, turn_id, result)
+                db.execute("PRAGMA user_version = 3")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -139,10 +159,34 @@ class History:
     def finish_memory_job(self, turn_id: int, lease: str, attempts: int, result: str | None) -> None:
         status = "completed" if result is not None else ("failed" if attempts >= MAX_ATTEMPTS else "queued")
         with closing(self._connect()) as db, db:
-            db.execute("""
+            updated = db.execute("""
                 UPDATE memory_jobs SET status = ?, ready_at = ?, result = ?, lease = NULL
                 WHERE turn_id = ? AND status = 'running' AND lease = ?
             """, (status, time.time() + 5 * attempts, result, turn_id, lease))
+            if updated.rowcount == 1 and result is not None:
+                self._insert_candidates(db, turn_id, result)
+
+    @staticmethod
+    def _insert_candidates(db: sqlite3.Connection, turn_id: int, result: str) -> None:
+        # Both worker output and v2 results contain validated suggestions as a JSON array.
+        db.executemany("""
+            INSERT INTO memory_candidates (turn_id, kind, text) VALUES (?, ?, ?)
+        """, ((turn_id, item["kind"], item["text"]) for item in json.loads(result)))
+
+    def list_memories(self, status: str) -> list[tuple[int, str, str, int]]:
+        with closing(self._connect()) as db:
+            return db.execute("""
+                SELECT id, kind, text, turn_id FROM memory_candidates
+                WHERE status = ? ORDER BY id
+            """, (status,)).fetchall()
+
+    def review_memory(self, candidate_id: int, *, approve: bool) -> bool:
+        status = "approved" if approve else "rejected"
+        with closing(self._connect()) as db, db:
+            return db.execute("""
+                UPDATE memory_candidates SET status = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = 'pending'
+            """, (status, candidate_id)).rowcount == 1
 
     def memory_job_counts(self) -> dict[str, int]:
         with closing(self._connect()) as db:

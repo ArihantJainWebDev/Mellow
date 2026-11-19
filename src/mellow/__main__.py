@@ -78,7 +78,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             continue
         if message.startswith("/"):
             fields = message.casefold().split(maxsplit=1)
-            command = fields[0] if len(fields) == 1 or fields[0] == "/resume" else message.casefold()
+            command = fields[0] if len(fields) == 1 or fields[0] in (
+                "/resume", "/approve", "/reject",
+            ) else message.casefold()
             if command == "/quit":
                 return 0
             if command == "/help":
@@ -86,6 +88,13 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 if history is not None:
                     print("/sessions  List saved sessions\n/resume ID  Resume a saved session")
                     print("/jobs  Show local memory job counts")
+                    print("/candidates  List pending memory suggestions\n/memories  List approved memories")
+                    print("/approve ID  Keep a suggestion\n/reject ID  Dismiss a suggestion")
+            elif command in ("/candidates", "/memories", "/approve", "/reject"):
+                if history is None:
+                    print("Saved memories are unavailable in private mode.")
+                else:
+                    _review_command(history, command, fields)
             elif command == "/jobs":
                 if history is None:
                     print("Memory jobs are unavailable in private mode.")
@@ -139,6 +148,31 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 print("Memory queue is full. This turn was saved without an extraction job.", file=sys.stderr)
         if status == 0:
             conversation.record(message, answer)
+
+
+def _review_command(history: History, command: str, fields: list[str]) -> None:
+    if command in ("/candidates", "/memories"):
+        status = "pending" if command == "/candidates" else "approved"
+        memories = history.list_memories(status)
+        if not memories:
+            print(f"No {status} memories.")
+        for candidate_id, kind, text, turn_id in memories:
+            # Escape terminal control characters in model output.
+            safe_text = "".join(char if char.isprintable() else " " for char in text)
+            print(f"{candidate_id} [{kind}] {safe_text} (turn {turn_id})")
+        return
+    try:
+        candidate_id = int(fields[1]) if len(fields) == 2 else 0
+    except ValueError:
+        candidate_id = 0
+    if not 1 <= candidate_id <= 2**63 - 1:
+        print(f"Usage: {command} ID. Use /candidates to find an ID.", file=sys.stderr)
+        return
+    approve = command == "/approve"
+    if history.review_memory(candidate_id, approve=approve):
+        print(f"Memory {candidate_id} {'approved' if approve else 'rejected'}.")
+    else:
+        print("No pending candidate with that ID.", file=sys.stderr)
 
 
 def _render(settings: Settings, message: str, **options) -> tuple[int, str]:

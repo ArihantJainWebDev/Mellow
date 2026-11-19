@@ -81,3 +81,12 @@ three total attempts. Pending work can resume on a later run with
 lease expires. Exiting stops the worker from taking more jobs and waits up
 to one second for it to finish. A request already sent to LM Studio can keep
 running independently of Mellow.
+
+### Review memory candidates
+
+In a saved interactive session, use /candidates to see pending suggestions
+and their source turn IDs. Use /approve ID to keep a candidate or /reject ID
+to dismiss it. Use /memories to view approved items. These commands run
+locally and work even when the LM Studio worker is off. Rejected entries
+remain in the local database as review records. Approved memories become
+available to inspect immediately. Using them in model replies is a later block.
