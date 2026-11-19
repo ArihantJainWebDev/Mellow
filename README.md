@@ -98,4 +98,4 @@ context. /clear resets the conversation context. Approved memories remain
 available across saved sessions. Use --private to skip saved memory recall.
 
 Recall ranks matches by shared keywords and uses up to three approved
-records per request. Semantic embeddings are a separate planned improvement.
+records per request. For semantic recall, load Nomic Embed Text v1.5 in LM Studio (localhost port 1234) and run python -m mellow --embedding-model MODEL_ID using the loaded model ID. It searches the 100 most recent approved records and falls back to keyword recall when local embeddings are unavailable. Combine it with --memory-model to enable background extraction as well.

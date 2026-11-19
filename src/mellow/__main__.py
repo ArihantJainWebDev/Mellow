@@ -9,7 +9,7 @@ import sys
 from mellow.conversation import RECENT_EXCHANGES, Conversation
 from mellow.config import ConfigurationError, Settings, load_settings
 from mellow.providers.groq import ProviderError, stream_reply
-from mellow.retrieval import memory_message
+from mellow.retrieval import SemanticRecall, memory_message
 from mellow.storage import History
 from mellow.memory_worker import start_worker
 
@@ -25,7 +25,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--private", action="store_true", help="Keep this chat off disk.")
     parser.add_argument("--memory-model", metavar="MODEL_ID",
                         help="Enable background extraction using this local LM Studio model.")
+    parser.add_argument("--embedding-model", metavar="MODEL_ID",
+                        help="Use a local Nomic embedding model for semantic memory recall.")
     arguments = parser.parse_args(argv)
+    if arguments.embedding_model and (arguments.private or arguments.once or arguments.check_config):
+        parser.error("--embedding-model requires a saved interactive session")
     if arguments.memory_model and (arguments.private or arguments.once or arguments.check_config):
         parser.error("--memory-model requires a saved interactive session")
     try:
@@ -43,11 +47,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         history = None if arguments.private else History(Path("data/history.db"))
+        semantic = SemanticRecall(arguments.embedding_model) if arguments.embedding_model else None
         if history is None or not arguments.memory_model:
-            return _chat(settings, history)
+            return _chat(settings, history, semantic=semantic)
         stop, worker = start_worker(history, arguments.memory_model)
         try:
-            return _chat(settings, history, extract_memory=True)
+            return _chat(settings, history, extract_memory=True, semantic=semantic)
         finally:
             stop.set()
             worker.join(timeout=1)
@@ -57,7 +62,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
 
-def _chat(settings: Settings, history: History | None, *, extract_memory: bool = False) -> int:
+def _chat(settings: Settings, history: History | None, *, extract_memory: bool = False,
+          semantic: SemanticRecall | None = None) -> int:
     conversation = Conversation()
     session_id = None
     print("Messages and recent exchanges are sent to Groq.")
@@ -146,7 +152,8 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             session_id, turn_id = history.start_turn(session_id, message)
         context = conversation.context()
         if history is not None:
-            memory = memory_message(message, history.list_memories("approved"))
+            approved = history.list_memories("approved")
+            memory = semantic.find(message, approved) if semantic else memory_message(message, approved)
             if memory is not None:
                 context = (context[0], memory, *context[1:])
         status, answer = _render(settings, message, context=context)

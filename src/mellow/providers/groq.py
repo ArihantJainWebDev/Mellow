@@ -103,7 +103,7 @@ def stream_reply(
         data=json.dumps({
             "model": settings.groq_model,
             "messages": [*context, {"role": "user", "content": message}],
-            "max_completion_tokens": 256,
+            "max_completion_tokens": 1024,
             "stream": True,
         }).encode("utf-8"),
         headers={

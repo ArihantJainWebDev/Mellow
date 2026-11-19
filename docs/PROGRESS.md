@@ -157,3 +157,16 @@ and verified that a fresh chat recalled the fictional preference via Groq.
 Broader source deletion, conflict resolution, embeddings, and semantic
 evaluation remain open. Bundle related work and verification into milestone
 commits rather than separate progress-only commits.
+
+### Semantic recall milestone
+
+Added opt-in LM Studio Nomic embeddings with task prefixes, normalized cosine
+ranking, an in-process cache keyed by text and model, a 100-record scan and
+three-match limit, and keyword fallback during a local inference outage.
+The 0.54 cutoff is provisional. In the live fixture, the intended paraphrase
+scored 0.559 and the unrelated question scored at most 0.517. Live checks
+covered recall, no-match, edits, deletion and fresh-session Groq recall.
+Broader relevance evaluation remains open. All 41 offline tests passed.
+
+The streaming completion budget is now 1,024 tokens. This includes the local
+fix for the earlier blank response that hit the 256-token cap.
