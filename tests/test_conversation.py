@@ -28,6 +28,28 @@ class ConversationTests(unittest.TestCase):
             for text in (f"question {index}", f"answer {index}")
         ])
 
+    def test_commands_stay_local_and_clear_context(self):
+        done = b"data: [DONE]\n\n"
+        with (
+            patch("mellow.__main__.load_settings", return_value=Settings("fake", "test")),
+            patch("builtins.input", side_effect=[
+                "/help", "/unknown", "Remember Velmora", "/clear", "What name?", "/quit",
+            ]),
+            patch("mellow.providers.groq.urlopen", side_effect=[
+                io.BytesIO(event("OK") + done), io.BytesIO(event("I don't know.") + done),
+            ]) as send,
+            redirect_stdout(io.StringIO()) as stdout,
+            redirect_stderr(io.StringIO()) as stderr,
+        ):
+            self.assertEqual(main([]), 0)
+        self.assertEqual(send.call_count, 2)
+        messages = json.loads(send.call_args.args[0].data)["messages"]
+        self.assertEqual([message["role"] for message in messages], ["system", "user"])
+        self.assertEqual(messages[-1]["content"], "What name?")
+        self.assertIn("/quit", stdout.getvalue())
+        self.assertIn("Conversation cleared.", stdout.getvalue())
+        self.assertIn("Unknown command", stderr.getvalue())
+
     def test_followup_http_payload_skips_failed_exchange(self):
         done = b"data: [DONE]\n\n"
         responses = [io.BytesIO(event("Blue.") + done),

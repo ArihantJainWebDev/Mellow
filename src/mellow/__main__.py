@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
 
     conversation = Conversation()
     print("Messages and recent exchanges are sent to Groq. History stays in memory.")
-    print("Press Ctrl+C or close input to leave.")
+    print("Type /help for commands or /quit to leave.")
     while True:
         try:
             message = input("You: ").strip()
@@ -45,6 +45,18 @@ def main(argv: list[str] | None = None) -> int:
             print()
             return 130
         if not message:
+            continue
+        if message.startswith("/"):
+            command = message.casefold()
+            if command == "/quit":
+                return 0
+            if command == "/help":
+                print("/help  Show commands\n/clear Clear recent conversation\n/quit  Exit Mellow")
+            elif command == "/clear":
+                conversation.clear()
+                print("Conversation cleared.")
+            else:
+                print("Unknown command. Type /help for available commands.", file=sys.stderr)
             continue
         status, answer = _render(settings, message, context=conversation.context())
         if status == 0:

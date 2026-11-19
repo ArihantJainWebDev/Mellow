@@ -16,6 +16,9 @@ class Conversation:
     def record(self, message: str, answer: str) -> None:
         self._recent.append((message, answer))
 
+    def clear(self) -> None:
+        self._recent.clear()
+
     def context(self) -> tuple[dict[str, str], ...]:
         messages = [{"role": "system", "content": PERSONALITY}]
         for message, answer in self._recent:

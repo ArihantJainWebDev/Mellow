@@ -9,7 +9,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 - Planning baseline: documented; detailed technical selections remain proposed.
 - Learning workflow updated: assistant implements/tests, owner learns through concise file/function/data-flow walkthroughs.
 - Chapter report card active: C01/C02 have partial evidence; C03 walkthrough provided, assessment pending.
-- New implementation: B01 verified; B02 request path offline-tested and live response confirmed by user terminal transcript on 2026-11-12. B03 streaming implemented, offline-tested, and live-verified on 2026-11-19. B04 adds session context and personality. B05 and later blocks pending.
+- New implementation: B01 verified; B02 request path offline-tested and live response confirmed by user terminal transcript on 2026-11-12. B03 streaming implemented, offline-tested, and live-verified on 2026-11-19. B04 adds session context and personality. B05 CLI commands implemented. B06 and later blocks pending.
 - Environment: `.venv` created with Python 3.14.7; editable package installed with python-dotenv 1.2.4. No data migrated, inference models downloaded, Git repository initialized, or GitHub release created.
 - Foundation and live Groq request/streaming paths verified; LM Studio and local-model readiness remain unverified. See [FOUNDATION.md](FOUNDATION.md) for commands and results.
 
@@ -18,7 +18,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Phase | Blocks | Status | Evidence |
 |---|---|---|---|
 | Foundation | B01–B02 | B01 verified; B02 live smoke check passed | 14 offline tests; user terminal transcript 2026-11-12 |
-| Conversation/CLI | B03–B05 | B03 verified; B04 implemented; B05 pending | 23 offline tests; one live streaming smoke check |
+| Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
 | History | B06–B07 | Not started | — |
 | Local worker | B08–B09 | Not started | — |
 | Memory controls | B10–B11 | Not started | — |
@@ -28,7 +28,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 
 ## Next implementation session — date not fixed
 
-Next: B05 adds CLI commands, including /help, /clear, and /quit.
+Next: B06 adds SQLite conversation history and message states.
 
 Stopping point: minimal understood request path with a valid-response check and a clear missing-configuration failure. No memory or background worker is required in this first block.
 
@@ -84,3 +84,5 @@ and persistent history remain separate blocks. C04 assessment pending.
 
 B04 verification: 25 offline tests passed. A live fictional two-turn prompt
 introduced an imaginary pet named Velmora and the follow-up returned Velmora.
+
+B05 verifies local command dispatch, clean exit, and clearing prior turns from the next request while retaining the personality prompt. C05 assessment pending.
