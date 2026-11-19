@@ -86,3 +86,9 @@ B04 verification: 25 offline tests passed. A live fictional two-turn prompt
 introduced an imaginary pet named Velmora and the follow-up returned Velmora.
 
 B05 verifies local command dispatch, clean exit, and clearing prior turns from the next request while retaining the personality prompt. C05 assessment pending.
+
+B07 live verification from the user's PowerShell run: /sessions listed two saved
+sessions. Resuming the newer session loaded one completed exchange and the model
+could not identify the user's preferred name. Switching to the earlier session
+loaded four completed exchanges, and a follow-up correctly recalled the name.
+The CLI returned to PowerShell after /quit.
