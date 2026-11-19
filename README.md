@@ -57,3 +57,10 @@ activated environment. The command sends a fictional example to localhost port
 different local port. This standalone check expects local API authentication to
 be off. Schema validation checks structure and bounds. It cannot verify that
 the model's claims follow from the input.
+
+Run the three fictional memory checks with
+`python -m mellow.memory_benchmark MODEL_ID` after loading the model in LM Studio.
+The runner prints the candidates and elapsed time for each prompt. Its keyword
+rubric is a first pass. Inspect the candidates for meaning and flag valid
+paraphrases that the rubric misses. For the hypothetical, the expected result
+is no saved candidate. See the progress log for live results.

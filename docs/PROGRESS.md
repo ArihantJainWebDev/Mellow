@@ -100,3 +100,8 @@ attempts did not return a usable answer within the socket timeout. The second
 explicitly reported a timeout after about 30 seconds. The temporary server was
 stopped. A successful live extraction and smaller-model benchmark remain open.
 C08 learning assessment remains pending.
+
+B08 adds a repeatable three-case smoke benchmark for a preference plus a timed
+episode, a greeting, and a hypothetical. It uses fictional inputs and prints
+candidate memories and per-case timing. The benchmark rubric passed offline
+checks. Live Qwen3-VL-4B-Instruct Q4_K_M results are pending installation and load.
