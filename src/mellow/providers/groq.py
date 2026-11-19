@@ -1,6 +1,6 @@
 """Groq text requests, including streamed deltas; no history or retries."""
 
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from http.client import HTTPException
 import json
 import socket
@@ -88,7 +88,9 @@ def _events(response) -> Iterator[str]:
         yield "\n".join(data)
 
 
-def stream_reply(settings: Settings, message: str) -> Iterator[str]:
+def stream_reply(
+    settings: Settings, message: str, *, context: tuple[dict[str, str], ...] = (),
+) -> Generator[str, None, None]:
     """Yield text as it arrives; require explicit successful stream completion.
 
     Closing the generator releases the HTTP response, including after Ctrl+C.
@@ -100,7 +102,7 @@ def stream_reply(settings: Settings, message: str) -> Iterator[str]:
         ENDPOINT,
         data=json.dumps({
             "model": settings.groq_model,
-            "messages": [{"role": "user", "content": message}],
+            "messages": [*context, {"role": "user", "content": message}],
             "max_completion_tokens": 256,
             "stream": True,
         }).encode("utf-8"),

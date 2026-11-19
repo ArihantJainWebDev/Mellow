@@ -9,7 +9,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 - Planning baseline: documented; detailed technical selections remain proposed.
 - Learning workflow updated: assistant implements/tests, owner learns through concise file/function/data-flow walkthroughs.
 - Chapter report card active: C01/C02 have partial evidence; C03 walkthrough provided, assessment pending.
-- New implementation: B01 verified; B02 request path offline-tested and live response confirmed by user terminal transcript on 2026-11-12. B03 streaming implemented, offline-tested, and live-verified on 2026-11-19. B04 and later blocks not started.
+- New implementation: B01 verified; B02 request path offline-tested and live response confirmed by user terminal transcript on 2026-11-12. B03 streaming implemented, offline-tested, and live-verified on 2026-11-19. B04 adds session context and personality. B05 and later blocks pending.
 - Environment: `.venv` created with Python 3.14.7; editable package installed with python-dotenv 1.2.4. No data migrated, inference models downloaded, Git repository initialized, or GitHub release created.
 - Foundation and live Groq request/streaming paths verified; LM Studio and local-model readiness remain unverified. See [FOUNDATION.md](FOUNDATION.md) for commands and results.
 
@@ -18,7 +18,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Phase | Blocks | Status | Evidence |
 |---|---|---|---|
 | Foundation | B01–B02 | B01 verified; B02 live smoke check passed | 14 offline tests; user terminal transcript 2026-11-12 |
-| Conversation/CLI | B03–B05 | B03 verified; B04–B05 pending | 23 offline tests; one live streaming smoke check |
+| Conversation/CLI | B03–B05 | B03 verified; B04 implemented; B05 pending | 23 offline tests; one live streaming smoke check |
 | History | B06–B07 | Not started | — |
 | Local worker | B08–B09 | Not started | — |
 | Memory controls | B10–B11 | Not started | — |
@@ -28,7 +28,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 
 ## Next implementation session — date not fixed
 
-Next: concise C03 understanding check and optional owner terminal check; then B04 recent conversation context/personality and B05 continuous CLI controls. The process still handles one message per launch.
+Next: B05 adds CLI commands, including /help, /clear, and /quit.
 
 Stopping point: minimal understood request path with a valid-response check and a clear missing-configuration failure. No memory or background worker is required in this first block.
 
@@ -73,3 +73,14 @@ User supplied terminal transcript from activated .venv at C:/Users/agraw/Music/M
 ## Version control
 
 Project code, tests, and development docs are tracked in the Mellow GitHub repository. Commit and push verified blocks there as development progresses. Keep credentials and the personal learning report card local.
+
+## B04 — recent context and personality
+
+`conversation.py` builds the prompt from a fixed personality and the latest four
+successful user/assistant pairs. The CLI keeps one Conversation per run and only
+records an exchange after the stream completes. A failed or cancelled turn
+returns to the prompt. Groq receives the context with each message. B05 commands
+and persistent history remain separate blocks. C04 assessment pending.
+
+B04 verification: 25 offline tests passed. A live fictional two-turn prompt
+introduced an imaginary pet named Velmora and the follow-up returned Velmora.

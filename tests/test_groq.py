@@ -71,7 +71,7 @@ class GroqTests(unittest.TestCase):
                 stdout, stderr = StringIO(), StringIO()
                 input_patch = patch("builtins.input", side_effect=input_value) if isinstance(input_value, BaseException) else patch("builtins.input", return_value=input_value)
                 with patch("mellow.__main__.load_settings", return_value=self.settings), input_patch, patch("mellow.__main__.stream_reply", return_value=(part for part in ["Hello"]), side_effect=error) as provider, redirect_stdout(stdout), redirect_stderr(stderr):
-                    code = main([])
+                    code = main(["--once"])
                 self.assertEqual(code, expected)
                 if expected == 0:
                     provider.assert_called_once_with(self.settings, "Hi")

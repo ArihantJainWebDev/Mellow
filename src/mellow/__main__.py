@@ -1,21 +1,23 @@
-"""CLI entry point: check configuration or stream one reply from Groq."""
+"""CLI entry point: check configuration or chat with Groq."""
 
 import argparse
 from contextlib import closing
 from pathlib import Path
 import sys
 
-from mellow.config import ConfigurationError, load_settings
+from mellow.conversation import Conversation
+from mellow.config import ConfigurationError, Settings, load_settings
 from mellow.providers.groq import ProviderError, stream_reply
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Mellow: stream one reply from Groq.")
+    parser = argparse.ArgumentParser(description="Mellow: chat with Groq.")
     parser.add_argument(
         "--env-file", type=Path, default=Path(".env"),
         help="Configuration file (default: .env in the current working directory).",
     )
     parser.add_argument("--check-config", action="store_true", help="Check settings without contacting Groq.")
+    parser.add_argument("--once", action="store_true", help="Send one message and exit.")
     arguments = parser.parse_args(argv)
     try:
         settings = load_settings(arguments.env_file)
@@ -27,26 +29,59 @@ def main(argv: list[str] | None = None) -> int:
         print("Required configuration is present. No API request was made.")
         return 0
 
-    try:
-        print("One message will be sent to Groq; no conversation is saved.")
-        message = input("You: ").strip()
+    if arguments.once:
+        return _one_message(settings)
+
+    conversation = Conversation()
+    print("Messages and recent exchanges are sent to Groq. History stays in memory.")
+    print("Press Ctrl+C or close input to leave.")
+    while True:
+        try:
+            message = input("You: ").strip()
+        except EOFError:
+            print()
+            return 0
+        except KeyboardInterrupt:
+            print()
+            return 130
         if not message:
-            print("Enter a non-empty message.", file=sys.stderr)
-            return 2
+            continue
+        status, answer = _render(settings, message, context=conversation.context())
+        if status == 0:
+            conversation.record(message, answer)
+
+
+def _render(settings: Settings, message: str, **options) -> tuple[int, str]:
+    parts = []
+    try:
         print("Mellow: ", end="", flush=True)
-        with closing(stream_reply(settings, message)) as chunks:
+        with closing(stream_reply(settings, message, **options)) as chunks:
             for text in chunks:
                 print(text, end="", flush=True)
+                parts.append(text)
         print()
-    except (KeyboardInterrupt, EOFError):
+        return 0, "".join(parts)
+    except KeyboardInterrupt:
         print("\n[Cancelled; any displayed reply is incomplete.]")
-        return 130
+        return 130, ""
     except ProviderError as error:
         print("\n[Reply failed; any displayed text is incomplete.]")
         print(f"Provider error: {error}", file=sys.stderr)
-        return 1
+        return 1, ""
 
-    return 0
+
+def _one_message(settings: Settings) -> int:
+    print("One message will be sent to Groq; no conversation is saved.")
+    try:
+        message = input("You: ").strip()
+    except (KeyboardInterrupt, EOFError):
+        print("\n[Cancelled.]")
+        return 130
+    if not message:
+        print("Enter a non-empty message.", file=sys.stderr)
+        return 2
+    status, _ = _render(settings, message)
+    return status
 
 
 if __name__ == "__main__":

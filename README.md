@@ -2,7 +2,7 @@
 
 Mellow is a personal companion intended to live alongside its owner in their operating system, understand their preferences and experiences, and eventually support voice, visual context, and useful actions.
 
-This folder starts a new implementation. The original Mellow-Gyrlick project remains a read-only learning reference. B01 and the B02 one-message Groq path are implemented. Fourteen offline tests pass on Python 3.14.7 / Windows. One real Groq response is confirmed by a user-provided terminal transcript on 2026-11-12; model identity, latency, and token usage were not independently measured. B03 streaming is implemented and live-verified (2026-11-19); conversation context, history, and memory remain planned. See [streaming walkthrough](docs/STREAMING.md).
+This folder starts a new implementation. The original Mellow-Gyrlick project remains a read-only learning reference. B01 and the B02 one-message Groq path are implemented. Fourteen offline tests pass on Python 3.14.7 / Windows. One real Groq response is confirmed by a user-provided terminal transcript on 2026-11-12; model identity, latency, and token usage were not independently measured. B03 streaming is implemented and live-verified (2026-11-19); B04 adds a personality prompt and recent session context. Persistent history and memory remain planned. See [streaming walkthrough](docs/STREAMING.md).
 
 ## Run the foundation
 
@@ -23,7 +23,7 @@ Configuration is read from `.env` in the current working directory, or an explic
 .\.venv\Scripts\python.exe -m mellow --check-config
 ```
 
-Without settings, this prints an actionable configuration error and exits with code 2. With both required values, it reports configuration present and exits 0. The `--check-config` option is not an API connectivity or credential-validity check. Without that option, Mellow asks for one message, sends it to Groq, prints text chunks as they arrive, and exits. Ctrl+C cancels the request and labels displayed output incomplete. See [the B02 walkthrough](docs/GROQ_REQUEST.md) for local setup and live verification. No `.env` containing real credentials was created during B01.
+Without settings, this prints an actionable configuration error and exits with code 2. With both required values, it reports configuration present and exits 0. The `--check-config` option is not an API connectivity or credential-validity check. Without that option, Mellow streams replies in a continuous session. Groq receives the personality prompt, up to four completed exchanges, and the current message. Nothing is written to disk. Ctrl+C during an answer cancels that turn. At the input prompt, Ctrl+C or EOF exits. Use `--once` for the original single-request mode. See [the B02 walkthrough](docs/GROQ_REQUEST.md) for local setup and live verification. No `.env` containing real credentials was created during B01.
 
 After environment activation, the installed `mellow` command invokes the same entry point. A fully pinned release environment remains future work; the current dependency range installed python-dotenv 1.2.4. Python >=3.11 is declared; only 3.14.7 has been verified so far, and future inference dependencies may change the supported range.
 

@@ -101,7 +101,7 @@ class StreamingTests(unittest.TestCase):
                         closed.append(True)
                 stdout,stderr=StringIO(),StringIO()
                 with patch("mellow.__main__.load_settings",return_value=self.settings),patch("builtins.input",return_value="Hi"),patch("mellow.__main__.stream_reply",return_value=chunks()),redirect_stdout(stdout),redirect_stderr(stderr):
-                    self.assertEqual(main([]),expected)
+                    self.assertEqual(main(["--once"]),expected)
                 self.assertIn("partial",stdout.getvalue())
                 self.assertIn("incomplete",stdout.getvalue())
                 self.assertTrue(closed)
