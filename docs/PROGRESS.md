@@ -20,7 +20,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Foundation | B01–B02 | B01 verified; B02 live smoke check passed | 14 offline tests; user terminal transcript 2026-11-12 |
 | Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
 | History | B06–B07 | B06–B07 verified | Offline CLI, SQLite reopen, and resumed request checks |
-| Local worker | B08–B09 | Not started | — |
+| Local worker | B08–B09 | B08 implemented, live extraction pending | 31 offline tests passed. Installed 12B model hit the read timeout. |
 | Memory controls | B10–B11 | Not started | — |
 | Retrieval | B12–B13 | Not started | — |
 | Automatic memory | B14–B15 | Not started | — |
@@ -92,3 +92,11 @@ sessions. Resuming the newer session loaded one completed exchange and the model
 could not identify the user's preferred name. Switching to the earlier session
 loaded four completed exchanges, and a follow-up correctly recalled the name.
 The CLI returned to PowerShell after /quit.
+
+B08 adds a standalone loopback-only LM Studio request and validates fact and
+episode candidates. It does not connect extraction to chat or storage yet.
+The installed Gemma 4 12B QAT loaded in 26.07 seconds. Two fictional extraction
+attempts did not return a usable answer within the socket timeout. The second
+explicitly reported a timeout after about 30 seconds. The temporary server was
+stopped. A successful live extraction and smaller-model benchmark remain open.
+C08 learning assessment remains pending.

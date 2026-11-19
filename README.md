@@ -47,3 +47,13 @@ After environment activation, the installed `mellow` command invokes the same en
 - Do not put credentials, personal conversations, recordings, or memory exports in these documents.
 
 Planning baseline: 2026-10-27. Learning agreement updated: 2026-11-10 (Asia/Kolkata). The assistant implements and verifies code; the owner learns through concise walkthroughs and brief assessments. The next implementation session is not scheduled.
+
+## Check local memory extraction
+
+Start LM Studio's server bound to 127.0.0.1, load a chat model that supports
+structured output, and run `python -m mellow.providers.lmstudio MODEL_ID` in the
+activated environment. The command sends a fictional example to localhost port
+1234 and prints validated fact and episode candidates. Use `--port PORT` for a
+different local port. This standalone check expects local API authentication to
+be off. Schema validation checks structure and bounds. It cannot verify that
+the model's claims follow from the input.
