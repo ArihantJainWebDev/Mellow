@@ -9,6 +9,7 @@ import sys
 from mellow.conversation import RECENT_EXCHANGES, Conversation
 from mellow.config import ConfigurationError, Settings, load_settings
 from mellow.providers.groq import ProviderError, stream_reply
+from mellow.retrieval import memory_message
 from mellow.storage import History
 from mellow.memory_worker import start_worker
 
@@ -63,7 +64,8 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
     if history is None:
         print("This session is kept off disk.")
     else:
-        print("Chat is saved locally to data/history.db. Use --private to keep a session off disk.")
+        print("Chat is saved locally to data/history.db. Relevant approved memories are sent to Groq.")
+        print("Use --private to skip saved history and memories.")
     print("Type /help for commands or /quit to leave.")
     while True:
         try:
@@ -77,9 +79,10 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
         if not message:
             continue
         if message.startswith("/"):
-            fields = message.casefold().split(maxsplit=1)
+            fields = message.split(maxsplit=1)
+            fields[0] = fields[0].casefold()
             command = fields[0] if len(fields) == 1 or fields[0] in (
-                "/resume", "/approve", "/reject",
+                "/resume", "/approve", "/reject", "/edit-memory", "/forget",
             ) else message.casefold()
             if command == "/quit":
                 return 0
@@ -90,7 +93,8 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                     print("/jobs  Show local memory job counts")
                     print("/candidates  List pending memory suggestions\n/memories  List approved memories")
                     print("/approve ID  Keep a suggestion\n/reject ID  Dismiss a suggestion")
-            elif command in ("/candidates", "/memories", "/approve", "/reject"):
+                    print("/edit-memory ID TEXT  Edit an approved memory\n/forget ID  Remove a memory")
+            elif command in ("/candidates", "/memories", "/approve", "/reject", "/edit-memory", "/forget"):
                 if history is None:
                     print("Saved memories are unavailable in private mode.")
                 else:
@@ -134,13 +138,18 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             elif command == "/clear":
                 conversation.clear()
                 session_id = None
-                print("Conversation cleared. Previously saved history is retained.")
+                print("Conversation cleared. Previously saved history is retained. Approved memories are still available.")
             else:
                 print("Unknown command. Type /help for available commands.", file=sys.stderr)
             continue
         if history is not None:
             session_id, turn_id = history.start_turn(session_id, message)
-        status, answer = _render(settings, message, context=conversation.context())
+        context = conversation.context()
+        if history is not None:
+            memory = memory_message(message, history.list_memories("approved"))
+            if memory is not None:
+                context = (context[0], memory, *context[1:])
+        status, answer = _render(settings, message, context=context)
         if history is not None:
             outcome = {0: "completed", 1: "failed", 130: "interrupted"}[status]
             queued = history.finish_turn(turn_id, outcome, answer, enqueue=extract_memory)
@@ -161,12 +170,30 @@ def _review_command(history: History, command: str, fields: list[str]) -> None:
             safe_text = "".join(char if char.isprintable() else " " for char in text)
             print(f"{candidate_id} [{kind}] {safe_text} (turn {turn_id})")
         return
+    arguments = fields[1].split(maxsplit=1) if len(fields) == 2 else []
+    expected = 2 if command == "/edit-memory" else 1
     try:
-        candidate_id = int(fields[1]) if len(fields) == 2 else 0
+        candidate_id = int(arguments[0]) if len(arguments) == expected else 0
     except ValueError:
         candidate_id = 0
     if not 1 <= candidate_id <= 2**63 - 1:
-        print(f"Usage: {command} ID. Use /candidates to find an ID.", file=sys.stderr)
+        suffix = " TEXT" if command == "/edit-memory" else ""
+        print(f"Usage: {command} ID{suffix}. Use /candidates or /memories to find an ID.", file=sys.stderr)
+        return
+    if command == "/edit-memory":
+        text = arguments[1].strip()
+        if not text or len(text) > 300:
+            print("Memory text must be 1 to 300 characters.", file=sys.stderr)
+        elif history.edit_memory(candidate_id, text):
+            print(f"Memory {candidate_id} updated.")
+        else:
+            print("No approved memory with that ID.", file=sys.stderr)
+        return
+    if command == "/forget":
+        if history.forget_memory(candidate_id):
+            print(f"Memory {candidate_id} removed. Source chat is retained.")
+        else:
+            print("No memory with that ID.", file=sys.stderr)
         return
     approve = command == "/approve"
     if history.review_memory(candidate_id, approve=approve):

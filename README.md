@@ -2,7 +2,7 @@
 
 Mellow is a personal companion intended to live alongside its owner in their operating system, understand their preferences and experiences, and eventually support voice, visual context, and useful actions.
 
-This folder starts a new implementation. The original Mellow-Gyrlick project remains a read-only learning reference. B01 and the B02 one-message Groq path are implemented. Fourteen offline tests pass on Python 3.14.7 / Windows. One real Groq response is confirmed by a user-provided terminal transcript on 2026-11-12; model identity, latency, and token usage were not independently measured. B03 streaming is implemented and live-verified (2026-11-19); B04 adds a personality prompt and recent session context. Persistent history and memory remain planned. See [streaming walkthrough](docs/STREAMING.md).
+This folder starts a new implementation. The original Mellow-Gyrlick project remains a read-only learning reference. B01 and the B02 one-message Groq path are implemented. Fourteen offline tests pass on Python 3.14.7 / Windows. One real Groq response is confirmed by a user-provided terminal transcript on 2026-11-12; model identity, latency, and token usage were not independently measured. B03 streaming is implemented and live-verified (2026-11-19); B04 adds a personality prompt and recent session context. Chat history is saved locally and approved memories support keyword recall. See [streaming walkthrough](docs/STREAMING.md).
 
 ## Run the foundation
 
@@ -89,4 +89,13 @@ and their source turn IDs. Use /approve ID to keep a candidate or /reject ID
 to dismiss it. Use /memories to view approved items. These commands run
 locally and work even when the LM Studio worker is off. Rejected entries
 remain in the local database as review records. Approved memories become
-available to inspect immediately. Using them in model replies is a later block.
+available to inspect immediately. Saved interactive chats send up to three relevant approved memories to Groq using local keyword matching.
+
+Use /edit-memory ID TEXT to correct an approved memory or /forget ID to
+remove a candidate or approved memory from review and retrieval. The source
+chat is retained and may still appear in recent or resumed conversation
+context. /clear resets the conversation context. Approved memories remain
+available across saved sessions. Use --private to skip saved memory recall.
+
+Recall ranks matches by shared keywords and uses up to three approved
+records per request. Semantic embeddings are a separate planned improvement.

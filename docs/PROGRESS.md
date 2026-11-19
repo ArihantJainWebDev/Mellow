@@ -21,7 +21,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
 | History | B06–B07 | B06–B07 verified | Offline CLI, SQLite reopen, and resumed request checks |
 | Local worker | B08–B09 | B08 and B09 verified | Qwen passed three extraction smoke cases. 36 offline tests passed. |
-| Memory controls | B10–B11 | B10 candidate review verified offline | SQLite migration, approval/rejection, local CLI dispatch |
+| Memory controls | B10–B11 | B10 review plus targeted edit, forget, and keyword recall verified | SQLite migration, approval/rejection, local CLI dispatch |
 | Retrieval | B12–B13 | Not started | — |
 | Automatic memory | B14–B15 | Not started | — |
 | Release | B16–B17 | Not started | — |
@@ -136,9 +136,24 @@ rows with turn provenance, review state, and review timestamp. New results
 create candidate rows in the same transaction that completes the job.
 The CLI exposes pending and approved items and changes review state locally.
 37 offline tests passed. They cover backfill, provenance, review persistence,
-and idempotent job completion. Editing, deletion, and retrieval remain open.
+and idempotent job completion. At the B10 checkpoint, editing, deletion, and retrieval were still open.
 
 Live B10 check: the CLI listed extracted candidates with source turn IDs.
 Approving one made it visible under /memories. Follow-up chat confirmed
 the approved item was still outside Groq's prompt, as expected before
 retrieval. Rejection and migration remain covered by offline tests.
+
+### Memory controls and recall milestone
+
+Approved memories can be edited or removed. The CLI ranks approved memories
+by keyword overlap and includes up to three matches in saved chat requests.
+Pending candidates and private sessions are excluded. Removal clears the
+duplicated extraction result for that job, while keeping the original chat
+and any other materialized candidates from the same job.
+
+38 offline tests passed. A live test seeded a fictional candidate in a
+temporary database, approved it through the CLI, restarted the process,
+and verified that a fresh chat recalled the fictional preference via Groq.
+Broader source deletion, conflict resolution, embeddings, and semantic
+evaluation remain open. Bundle related work and verification into milestone
+commits rather than separate progress-only commits.

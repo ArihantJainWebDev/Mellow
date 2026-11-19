@@ -191,3 +191,25 @@ class History:
     def memory_job_counts(self) -> dict[str, int]:
         with closing(self._connect()) as db:
             return dict(db.execute("SELECT status, COUNT(*) FROM memory_jobs GROUP BY status"))
+
+    def edit_memory(self, candidate_id: int, text: str) -> bool:
+        with closing(self._connect()) as db, db:
+            row = db.execute("""
+                UPDATE memory_candidates SET text = ?, reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND status = 'approved' RETURNING turn_id
+            """, (text, candidate_id)).fetchone()
+            if row is None:
+                return False
+            db.execute("UPDATE memory_jobs SET result = NULL WHERE turn_id = ?", row)
+            return True
+
+    def forget_memory(self, candidate_id: int) -> bool:
+        with closing(self._connect()) as db, db:
+            row = db.execute("""
+                DELETE FROM memory_candidates WHERE id = ? RETURNING turn_id
+            """, (candidate_id,)).fetchone()
+            if row is None:
+                return False
+            # Candidate rows already hold the other suggestions from this job.
+            db.execute("UPDATE memory_jobs SET result = NULL WHERE turn_id = ?", row)
+            return True
