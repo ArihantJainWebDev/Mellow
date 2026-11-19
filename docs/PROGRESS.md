@@ -20,7 +20,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Foundation | B01–B02 | B01 verified; B02 live smoke check passed | 14 offline tests; user terminal transcript 2026-11-12 |
 | Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
 | History | B06–B07 | B06–B07 verified | Offline CLI, SQLite reopen, and resumed request checks |
-| Local worker | B08–B09 | B08 implemented, live extraction pending | 31 offline tests passed. Installed 12B model hit the read timeout. |
+| Local worker | B08–B09 | B08 verified, B09 pending | Qwen passed all three local smoke cases after prompt refinement. 33 offline tests passed. |
 | Memory controls | B10–B11 | Not started | — |
 | Retrieval | B12–B13 | Not started | — |
 | Automatic memory | B14–B15 | Not started | — |
@@ -105,3 +105,18 @@ B08 adds a repeatable three-case smoke benchmark for a preference plus a timed
 episode, a greeting, and a hypothetical. It uses fictional inputs and prints
 candidate memories and per-case timing. The benchmark rubric passed offline
 checks. Live Qwen3-VL-4B-Instruct Q4_K_M results are pending installation and load.
+
+### B08 live Qwen check
+
+Qwen3-VL-4B-Instruct Q4_K_M was already loaded at 16,384 context tokens
+with four parallel slots at inspection. The run used that existing setup.
+The first pass matched 1/3 cases in 14.02 s, 4.53 s, and 9.58 s. It missed
+a preference and proposed a hypothetical as an episode. The extraction
+prompt now checks both memory kinds and defines an episode as something
+that happened. It excludes hypothetical and conditional statements.
+
+The repeat passed all three cases in 4.67 s, 1.50 s, and 1.86 s. Output
+inspection confirmed the two expected candidates and two empty lists.
+These prompts informed the refinement, so this is a smoke check. A separate
+evaluation set and controlled performance measurements remain future work.
+All 33 offline tests passed. Next: B09 background processing.
