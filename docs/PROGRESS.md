@@ -137,3 +137,8 @@ create candidate rows in the same transaction that completes the job.
 The CLI exposes pending and approved items and changes review state locally.
 37 offline tests passed. They cover backfill, provenance, review persistence,
 and idempotent job completion. Editing, deletion, and retrieval remain open.
+
+Live B10 check: the CLI listed extracted candidates with source turn IDs.
+Approving one made it visible under /memories. Follow-up chat confirmed
+the approved item was still outside Groq's prompt, as expected before
+retrieval. Rejection and migration remain covered by offline tests.
