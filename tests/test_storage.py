@@ -50,3 +50,43 @@ class HistoryTests(unittest.TestCase):
                 (3, "restart", "visible text", "completed"),
                 (session_id, "abrupt exit", "", "pending"),
             ])
+
+    def test_resume_reopens_existing_session_and_sends_only_completed_context(self):
+        requests = []
+
+        def stream(settings, message, **options):
+            requests.append(options["context"])
+            yield "new reply"
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "history.db"
+            stored = History(path)
+            session_id = None
+            for index in range(5):
+                session_id, turn_id = stored.start_turn(session_id, f"question {index}")
+                stored.finish_turn(turn_id, "completed", f"reply {index}")
+            _, turn_id = stored.start_turn(session_id, "failed question")
+            stored.finish_turn(turn_id, "failed", "partial")
+            stored.start_turn(session_id, "pending question")
+            stdout = io.StringIO()
+            with (
+                patch("mellow.__main__.History", return_value=History(path)),
+                patch("mellow.__main__.load_settings", return_value=Settings("fake", "test")),
+                patch("mellow.__main__.stream_reply", side_effect=stream),
+                patch("builtins.input", side_effect=[
+                    "/sessions", f"/resume {session_id}", "/resume 999999999999999999999",
+                    "/resume 999", "follow-up", "/quit",
+                ]),
+                redirect_stdout(stdout),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(main([]), 0)
+            self.assertIn(f"{session_id} |", stdout.getvalue())
+            self.assertIn(f"Resumed session {session_id}", stdout.getvalue())
+            self.assertEqual(len(requests), 1)
+            self.assertEqual([item["content"] for item in requests[0][1:]], [
+                text for index in range(1, 5)
+                for text in (f"question {index}", f"reply {index}")
+            ])
+            self.assertEqual(History(path).list_sessions()[0][2], 8)
+            self.assertEqual(len(History(path).list_sessions()), 1)

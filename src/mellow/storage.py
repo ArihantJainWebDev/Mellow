@@ -43,6 +43,25 @@ class History:
         db.execute("PRAGMA foreign_keys = ON")
         return db
 
+    def list_sessions(self) -> list[tuple[int, str, int]]:
+        with closing(self._connect()) as db:
+            return db.execute("""
+                SELECT sessions.id, sessions.created_at, COUNT(turns.id)
+                FROM sessions LEFT JOIN turns ON turns.session_id = sessions.id
+                GROUP BY sessions.id ORDER BY sessions.id DESC
+            """).fetchall()
+
+    def recent_completed(self, session_id: int, limit: int) -> list[tuple[str, str]] | None:
+        with closing(self._connect()) as db:
+            if db.execute("SELECT 1 FROM sessions WHERE id = ?", (session_id,)).fetchone() is None:
+                return None
+            rows = db.execute("""
+                SELECT user_text, reply_text FROM turns
+                WHERE session_id = ? AND status = 'completed'
+                ORDER BY id DESC LIMIT ?
+            """, (session_id, limit)).fetchall()
+        return rows[::-1]
+
     def start_turn(self, session_id: int | None, message: str) -> tuple[int, int]:
         with closing(self._connect()) as db, db:
             if session_id is None:

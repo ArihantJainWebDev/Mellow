@@ -9,7 +9,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 - Planning baseline: documented; detailed technical selections remain proposed.
 - Learning workflow updated: assistant implements/tests, owner learns through concise file/function/data-flow walkthroughs.
 - Chapter report card active: C01/C02 have partial evidence; C03 walkthrough provided, assessment pending.
-- New implementation: B01 verified; B02 request path offline-tested and live response confirmed by user terminal transcript on 2026-11-12. B03 streaming implemented, offline-tested, and live-verified on 2026-11-19. B04 adds session context and personality. B05 CLI commands implemented. B06 adds SQLite history and reply states. B07 resume is next.
+- New implementation: B01 verified; B02 request path offline-tested and live response confirmed by user terminal transcript on 2026-11-12. B03 streaming implemented, offline-tested, and live-verified on 2026-11-19. B04 adds session context and personality. B05 CLI commands implemented. B06 adds SQLite history and reply states. B07 adds saved session listing and resume.
 - Environment: `.venv` created with Python 3.14.7; editable package installed with python-dotenv 1.2.4. No data migrated, inference models downloaded, Git repository initialized, or GitHub release created.
 - Foundation and live Groq request/streaming paths verified; LM Studio and local-model readiness remain unverified. See [FOUNDATION.md](FOUNDATION.md) for commands and results.
 
@@ -19,7 +19,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 |---|---|---|---|
 | Foundation | B01–B02 | B01 verified; B02 live smoke check passed | 14 offline tests; user terminal transcript 2026-11-12 |
 | Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
-| History | B06–B07 | B06 implemented, B07 pending | Offline CLI and SQLite reopen checks |
+| History | B06–B07 | B06–B07 verified | Offline CLI, SQLite reopen, and resumed request checks |
 | Local worker | B08–B09 | Not started | — |
 | Memory controls | B10–B11 | Not started | — |
 | Retrieval | B12–B13 | Not started | — |
@@ -28,7 +28,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 
 ## Next implementation session — date not fixed
 
-Next: B07 adds session selection and resume. B06 stores history in the ignored local data/history.db file. Replies are marked pending before generation and completed, failed, or interrupted after it. A hard termination can leave pending rows. /clear starts a fresh context and session while retaining earlier records. --private and --once bypass storage. C06 assessment pending.
+B07 adds /sessions and /resume ID. Resume uses only the latest four completed exchanges and appends new turns to the selected session. Next: B08 local model and structured output. B06 stores history in the ignored local data/history.db file. Replies are marked pending before generation and completed, failed, or interrupted after it. A hard termination can leave pending rows. /clear starts a fresh context and session while retaining earlier records. --private and --once bypass storage. C06 assessment pending.
 
 Stopping point: minimal understood request path with a valid-response check and a clear missing-configuration failure. No memory or background worker is required in this first block.
 

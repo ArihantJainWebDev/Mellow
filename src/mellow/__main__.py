@@ -6,7 +6,7 @@ from pathlib import Path
 import sqlite3
 import sys
 
-from mellow.conversation import Conversation
+from mellow.conversation import RECENT_EXCHANGES, Conversation
 from mellow.config import ConfigurationError, Settings, load_settings
 from mellow.providers.groq import ProviderError, stream_reply
 from mellow.storage import History
@@ -64,11 +64,41 @@ def _chat(settings: Settings, history: History | None) -> int:
         if not message:
             continue
         if message.startswith("/"):
-            command = message.casefold()
+            fields = message.casefold().split(maxsplit=1)
+            command = fields[0] if len(fields) == 1 or fields[0] == "/resume" else message.casefold()
             if command == "/quit":
                 return 0
             if command == "/help":
                 print("/help  Show commands\n/clear Clear recent conversation\n/quit  Exit Mellow")
+                if history is not None:
+                    print("/sessions  List saved sessions\n/resume ID  Resume a saved session")
+            elif command in ("/sessions", "/resume"):
+                if history is None:
+                    print("Saved sessions are unavailable in private mode.")
+                elif command == "/sessions":
+                    sessions = history.list_sessions()
+                    if not sessions:
+                        print("No saved sessions.")
+                    for saved_id, created_at, count in sessions:
+                        active = " (active)" if saved_id == session_id else ""
+                        print(f"{saved_id} | {created_at} UTC | {count} turn(s){active}")
+                else:
+                    try:
+                        saved_id = int(fields[1]) if len(fields) == 2 else 0
+                    except ValueError:
+                        saved_id = 0
+                    if not 1 <= saved_id <= 2**63 - 1:
+                        print("Usage: /resume ID. Use /sessions to find an ID.", file=sys.stderr)
+                        continue
+                    exchanges = history.recent_completed(saved_id, RECENT_EXCHANGES)
+                    if exchanges is None:
+                        print("Session not found. Use /sessions to find an ID.", file=sys.stderr)
+                        continue
+                    conversation.clear()
+                    for user_text, reply_text in exchanges:
+                        conversation.record(user_text, reply_text)
+                    session_id = saved_id
+                    print(f"Resumed session {saved_id}. Loaded {len(exchanges)} completed exchange(s).")
             elif command == "/clear":
                 conversation.clear()
                 session_id = None
