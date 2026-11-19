@@ -1,0 +1,33 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Personal runtime data (location will be finalized with storage)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+
+# Editor / OS files
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
+
+# Personal learning assessments
+/docs/REPORT_CARD.md

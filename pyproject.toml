@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=77,<85"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mellow-companion"
+version = "0.1.0.dev0"
+description = "A personal CLI companion, rebuilt one understandable block at a time."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["python-dotenv>=1.2,<2"]
+
+[project.scripts]
+mellow = "mellow.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
