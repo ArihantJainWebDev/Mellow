@@ -41,7 +41,7 @@ class ConversationTests(unittest.TestCase):
             redirect_stdout(io.StringIO()) as stdout,
             redirect_stderr(io.StringIO()) as stderr,
         ):
-            self.assertEqual(main([]), 0)
+            self.assertEqual(main(["--private"]), 0)
         self.assertEqual(send.call_count, 2)
         messages = json.loads(send.call_args.args[0].data)["messages"]
         self.assertEqual([message["role"] for message in messages], ["system", "user"])
@@ -62,7 +62,7 @@ class ConversationTests(unittest.TestCase):
             redirect_stdout(io.StringIO()),
             redirect_stderr(io.StringIO()),
         ):
-            self.assertEqual(main([]), 0)
+            self.assertEqual(main(["--private"]), 0)
         request = json.loads(send.call_args.args[0].data)
         self.assertEqual(request["messages"][0]["role"], "system")
         self.assertEqual(request["messages"][1:], [
