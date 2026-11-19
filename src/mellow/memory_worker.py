@@ -1,0 +1,35 @@
+"""Process local extraction jobs serially outside the chat loop."""
+
+from dataclasses import asdict
+import json
+import sqlite3
+from threading import Event, Thread
+
+from mellow.providers.lmstudio import LocalModelError, extract_memories
+from mellow.storage import History
+
+
+def run_worker(history: History, model: str, stop: Event) -> None:
+    while not stop.is_set():
+        try:
+            job = history.claim_memory_job()
+            if job is None:
+                stop.wait(1)
+                continue
+            turn_id, lease, message, attempts = job
+            try:
+                suggestions = extract_memories(model, message)
+                result = json.dumps([asdict(candidate) for candidate in suggestions])
+            except LocalModelError:
+                result = None
+            history.finish_memory_job(turn_id, lease, attempts, result)
+        except sqlite3.Error:
+            # A claimed job can be recovered after its lease expires.
+            stop.wait(1)
+
+
+def start_worker(history: History, model: str) -> tuple[Event, Thread]:
+    stop = Event()
+    thread = Thread(target=run_worker, args=(history, model, stop), daemon=True)
+    thread.start()
+    return stop, thread

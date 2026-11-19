@@ -64,3 +64,20 @@ The runner prints the candidates and elapsed time for each prompt. Its keyword
 rubric is a first pass. Inspect the candidates for meaning and flag valid
 paraphrases that the rubric misses. For the hypothetical, the expected result
 is no saved candidate. See the progress log for live results.
+
+### Background memory extraction
+
+With LM Studio running on localhost port 1234 and a chat model loaded, run
+`python -m mellow --memory-model qwen3-vl-4b-instruct` (use your loaded model ID).
+This opts the saved session into background extraction. Use `/jobs` to inspect
+local queue counts. A job sends the user's message from a completed turn to
+the local model. Candidates are kept in SQLite for later review and retrieval.
+Private and single-request modes do not enqueue jobs.
+
+The queue admits up to 100 active jobs. A full queue leaves chat history intact
+and reports that the turn was skipped for extraction. Failed jobs retry up to
+three total attempts. Pending work can resume on a later run with
+`--memory-model`. Interrupted claims can be recovered after their two-minute
+lease expires. Exiting stops the worker from taking more jobs and waits up
+to one second for it to finish. A request already sent to LM Studio can keep
+running independently of Mellow.

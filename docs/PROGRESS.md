@@ -20,7 +20,7 @@ Updated: 2026-11-19 (Asia/Kolkata).
 | Foundation | B01–B02 | B01 verified; B02 live smoke check passed | 14 offline tests; user terminal transcript 2026-11-12 |
 | Conversation/CLI | B03–B05 | B03–B05 verified | 26 offline tests and live streaming/context smoke checks |
 | History | B06–B07 | B06–B07 verified | Offline CLI, SQLite reopen, and resumed request checks |
-| Local worker | B08–B09 | B08 verified, B09 pending | Qwen passed all three local smoke cases after prompt refinement. 33 offline tests passed. |
+| Local worker | B08–B09 | B08 verified, B09 offline verified | Qwen passed three extraction smoke cases. 36 offline tests passed. |
 | Memory controls | B10–B11 | Not started | — |
 | Retrieval | B12–B13 | Not started | — |
 | Automatic memory | B14–B15 | Not started | — |
@@ -120,3 +120,11 @@ inspection confirmed the two expected candidates and two empty lists.
 These prompts informed the refinement, so this is a smoke check. A separate
 evaluation set and controlled performance measurements remain future work.
 All 33 offline tests passed. Next: B09 background processing.
+
+### B09 background jobs
+
+Added opt-in extraction and /jobs, with SQLite schema v2, atomic queuing,
+bounded admission, retries, and expiring claims. Candidate results are linked
+to their source turns. Offline checks covered history migration, chat while
+extraction waits, offline retries, restart recovery, and stale results.
+Live worker integration remains to be checked. Next: B10 memory controls.
