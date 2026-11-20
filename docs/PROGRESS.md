@@ -184,3 +184,15 @@ a one-word bicycle type to its subject, suppressed a repeated fact, skipped
 a question, and saved a correction candidate that replaced the old record
 when confirmed. Paraphrase deduplication and automatic conflict detection
 remain outside this implementation. Next: B15 summaries.
+
+### Session recap and worker recovery milestone
+
+B15 adds a bounded extractive recap that reads up to 12 older completed
+turns beyond the four full exchanges. It tracks source turn IDs and is
+computed directly from SQLite so there is no stale saved summary when
+a source turn is removed. /summary previews it locally.
+
+The same milestone adds schema v4, job error reporting in /jobs and
+manual recovery with /retry-job. The automated suite passed 44 tests,
+including resume with older context, clear/private isolation, source
+removal, schema migration and retry. Combined live acceptance is pending.

@@ -23,6 +23,7 @@ class MemoryReviewTests(unittest.TestCase):
                 '[{"kind":"fact","text":"Prefers tea"},{"kind":"episode","text":"Went hiking"}]')
             with closing(sqlite3.connect(path)) as db, db:
                 db.execute("DROP TABLE memory_candidates")
+                db.execute("ALTER TABLE memory_jobs DROP COLUMN last_error")
                 db.execute("PRAGMA user_version = 2")
             history = History(path)
             first, second = history.list_memories("pending")

@@ -9,7 +9,7 @@ import sqlite3
 import time
 from uuid import uuid4
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -74,7 +74,10 @@ class History:
                     WHERE status = 'completed' AND result IS NOT NULL
                 """):
                     self._insert_candidates(db, turn_id, result)
-                db.execute("PRAGMA user_version = 3")
+                version = 3
+            if version == 3:
+                db.execute("ALTER TABLE memory_jobs ADD COLUMN last_error TEXT")
+                db.execute("PRAGMA user_version = 4")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -100,6 +103,16 @@ class History:
                 WHERE session_id = ? AND status = 'completed'
                 ORDER BY id DESC LIMIT ?
             """, (session_id, limit)).fetchall()
+        return rows[::-1]
+
+    def summary_exchanges(self, session_id: int, skip: int, limit: int = 12) -> list[tuple[int, str, str]]:
+        """Return bounded older completed excerpts in chronological order."""
+        with closing(self._connect()) as db:
+            rows = db.execute("""
+                SELECT id, SUBSTR(user_text, 1, 161), SUBSTR(reply_text, 1, 101)
+                FROM turns WHERE session_id = ? AND status = 'completed'
+                ORDER BY id DESC LIMIT ? OFFSET ?
+            """, (session_id, limit, skip)).fetchall()
         return rows[::-1]
 
     def start_turn(self, session_id: int | None, message: str) -> tuple[int, int]:
@@ -140,7 +153,7 @@ class History:
             db.execute("""
                 UPDATE memory_jobs
                 SET status = CASE WHEN attempts >= ? THEN 'failed' ELSE 'queued' END,
-                    lease = NULL
+                    lease = NULL, last_error = 'Worker stopped before recording the result.'
                 WHERE status = 'running' AND ready_at <= ?
             """, (MAX_ATTEMPTS, now))
             row = db.execute("""
@@ -170,13 +183,14 @@ class History:
             """, (turn_id,)).fetchall()
         return [(user[:400], reply[:400]) for user, reply in reversed(rows)]
 
-    def finish_memory_job(self, turn_id: int, lease: str, attempts: int, result: str | None) -> None:
+    def finish_memory_job(self, turn_id: int, lease: str, attempts: int,
+                          result: str | None, *, error: str | None = None) -> None:
         status = "completed" if result is not None else ("failed" if attempts >= MAX_ATTEMPTS else "queued")
         with closing(self._connect()) as db, db:
             updated = db.execute("""
-                UPDATE memory_jobs SET status = ?, ready_at = ?, result = ?, lease = NULL
+                UPDATE memory_jobs SET status = ?, ready_at = ?, result = ?, lease = NULL, last_error = ?
                 WHERE turn_id = ? AND status = 'running' AND lease = ?
-            """, (status, time.time() + 5 * attempts, result, turn_id, lease))
+            """, (status, time.time() + 5 * attempts, result, error, turn_id, lease))
             if updated.rowcount == 1 and result is not None:
                 self._insert_candidates(db, turn_id, result, deduplicate=True)
 
@@ -217,6 +231,22 @@ class History:
     def memory_job_counts(self) -> dict[str, int]:
         with closing(self._connect()) as db:
             return dict(db.execute("SELECT status, COUNT(*) FROM memory_jobs GROUP BY status"))
+
+    def failed_memory_jobs(self, limit: int = 10) -> list[tuple[int, int, str | None]]:
+        with closing(self._connect()) as db:
+            return db.execute("""
+                SELECT turn_id, attempts, last_error FROM memory_jobs
+                WHERE status = 'failed' ORDER BY turn_id DESC LIMIT ?
+            """, (limit,)).fetchall()
+
+    def retry_memory_job(self, turn_id: int) -> bool:
+        with closing(self._connect()) as db, db:
+            return db.execute("""
+                UPDATE memory_jobs SET status = 'queued', attempts = 0, ready_at = 0,
+                    lease = NULL, last_error = NULL
+                WHERE turn_id = ? AND status = 'failed'
+                  AND (SELECT COUNT(*) FROM memory_jobs WHERE status IN ('queued', 'running')) < ?
+            """, (turn_id, MAX_ACTIVE_JOBS)).rowcount == 1
 
     def edit_memory(self, candidate_id: int, text: str) -> bool:
         with closing(self._connect()) as db, db:

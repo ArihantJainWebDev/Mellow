@@ -109,3 +109,17 @@ To apply a correction, use /candidates and /memories to find the two IDs.
 Run /replace-memory CANDIDATE_ID MEMORY_ID to approve the correction and
 remove the old approved memory of the same kind in one transaction.
 The source conversation remains in history.
+
+### Older conversation context and job recovery
+
+A saved chat sends its four recent completed exchanges in full and adds a
+short recap quoting up to 12 earlier completed exchanges from that session.
+Use /summary to preview those excerpts and source turn IDs. The recap is
+rebuilt from SQLite, so it works on resume and reflects changes to its
+source turns. It uses clipped quotes and may omit details. Private chats
+skip the recap. /clear starts a new session context.
+
+Use /jobs to list recent failed extraction jobs, including the last
+recorded reason when available. After resolving the issue, use
+/retry-job TURN_ID to requeue that job. A worker launched with
+--memory-model processes it. Existing failed jobs may lack a reason.

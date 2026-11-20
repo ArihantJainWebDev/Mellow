@@ -84,7 +84,8 @@ class HistoryTests(unittest.TestCase):
             self.assertIn(f"{session_id} |", stdout.getvalue())
             self.assertIn(f"Resumed session {session_id}", stdout.getvalue())
             self.assertEqual(len(requests), 1)
-            self.assertEqual([item["content"] for item in requests[0][1:]], [
+            self.assertIn('"user": "question 0"', requests[0][1]["content"])
+            self.assertEqual([item["content"] for item in requests[0][2:]], [
                 text for index in range(1, 5)
                 for text in (f"question {index}", f"reply {index}")
             ])

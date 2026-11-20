@@ -11,6 +11,7 @@ from mellow.config import ConfigurationError, Settings, load_settings
 from mellow.providers.groq import ProviderError, stream_reply
 from mellow.retrieval import SemanticRecall, memory_message
 from mellow.storage import History
+from mellow.summary import session_summary
 from mellow.memory_worker import start_worker
 
 
@@ -70,7 +71,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
     if history is None:
         print("This session is kept off disk.")
     else:
-        print("Chat is saved locally to data/history.db. Relevant approved memories are sent to Groq.")
+        print("Chat is saved locally to data/history.db. Older session excerpts and relevant approved memories are sent to Groq.")
         print("Use --private to skip saved history and memories.")
     print("Type /help for commands or /quit to leave.")
     while True:
@@ -88,7 +89,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             fields = message.split(maxsplit=1)
             fields[0] = fields[0].casefold()
             command = fields[0] if len(fields) == 1 or fields[0] in (
-                "/resume", "/approve", "/reject", "/edit-memory", "/forget", "/replace-memory",
+                "/resume", "/approve", "/reject", "/edit-memory", "/forget", "/replace-memory", "/retry-job",
             ) else message.casefold()
             if command == "/quit":
                 return 0
@@ -96,7 +97,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 print("/help  Show commands\n/clear Clear recent conversation\n/quit  Exit Mellow")
                 if history is not None:
                     print("/sessions  List saved sessions\n/resume ID  Resume a saved session")
-                    print("/jobs  Show local memory job counts")
+                    print("/summary  Show older context for this session")
+                    print("/jobs  Show memory job counts and recent failures")
+                    print("/retry-job TURN_ID  Requeue a failed extraction")
                     print("/candidates  List pending memory suggestions\n/memories  List approved memories")
                     print("/approve ID  Keep a suggestion\n/reject ID  Dismiss a suggestion")
                     print("/edit-memory ID TEXT  Edit an approved memory\n/forget ID  Remove a memory")
@@ -107,6 +110,25 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                     print("Saved memories are unavailable in private mode.")
                 else:
                     _review_command(history, command, fields)
+            elif command == "/summary":
+                recap = session_summary(history, session_id) if history is not None and session_id is not None else None
+                print(recap["content"] if recap else "No older saved exchanges in this session.")
+            elif command == "/retry-job":
+                if history is None:
+                    print("Memory jobs are unavailable in private mode.")
+                    continue
+                try:
+                    turn_id = int(fields[1]) if len(fields) == 2 else 0
+                except ValueError:
+                    turn_id = 0
+                if not 1 <= turn_id <= 2**63 - 1:
+                    print("Usage: /retry-job TURN_ID", file=sys.stderr)
+                elif history.retry_memory_job(turn_id):
+                    print(f"Requeued turn {turn_id}.")
+                    if not extract_memory:
+                        print("Start Mellow with --memory-model to process it.")
+                else:
+                    print("Turn has no failed job or the queue is full.", file=sys.stderr)
             elif command == "/jobs":
                 if history is None:
                     print("Memory jobs are unavailable in private mode.")
@@ -116,6 +138,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                         f"{state}={counts.get(state, 0)}"
                         for state in ("queued", "running", "completed", "failed")
                     ))
+                    for failed_id, attempts, reason in history.failed_memory_jobs():
+                        print(f"Turn {failed_id} failed after {attempts} attempt(s). "
+                              f"{reason or 'No error reason was recorded.'}")
             elif command in ("/sessions", "/resume"):
                 if history is None:
                     print("Saved sessions are unavailable in private mode.")
@@ -154,6 +179,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             session_id, turn_id = history.start_turn(session_id, message)
         context = conversation.context()
         if history is not None:
+            recap = session_summary(history, session_id)
+            if recap is not None:
+                context = (context[0], recap, *context[1:])
             approved = history.list_memories("approved")
             memory = semantic.find(message, approved) if semantic else memory_message(message, approved)
             if memory is not None:
