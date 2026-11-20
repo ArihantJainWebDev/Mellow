@@ -3,6 +3,8 @@
 from contextlib import closing
 from pathlib import Path
 import json
+import re
+import unicodedata
 import sqlite3
 import time
 from uuid import uuid4
@@ -156,6 +158,18 @@ class History:
             """, (lease, now + LEASE_SECONDS, turn_id))
             return turn_id, lease, message, attempts + 1
 
+    def extraction_context(self, turn_id: int) -> list[tuple[str, str]]:
+        with closing(self._connect()) as db:
+            rows = db.execute("""
+                SELECT earlier.user_text, earlier.reply_text
+                FROM turns AS current JOIN turns AS earlier
+                  ON current.session_id = earlier.session_id
+                WHERE current.id = ? AND earlier.id < current.id
+                  AND earlier.status = 'completed'
+                ORDER BY earlier.id DESC LIMIT 2
+            """, (turn_id,)).fetchall()
+        return [(user[:400], reply[:400]) for user, reply in reversed(rows)]
+
     def finish_memory_job(self, turn_id: int, lease: str, attempts: int, result: str | None) -> None:
         status = "completed" if result is not None else ("failed" if attempts >= MAX_ATTEMPTS else "queued")
         with closing(self._connect()) as db, db:
@@ -164,14 +178,26 @@ class History:
                 WHERE turn_id = ? AND status = 'running' AND lease = ?
             """, (status, time.time() + 5 * attempts, result, turn_id, lease))
             if updated.rowcount == 1 and result is not None:
-                self._insert_candidates(db, turn_id, result)
+                self._insert_candidates(db, turn_id, result, deduplicate=True)
 
     @staticmethod
-    def _insert_candidates(db: sqlite3.Connection, turn_id: int, result: str) -> None:
-        # Both worker output and v2 results contain validated suggestions as a JSON array.
-        db.executemany("""
-            INSERT INTO memory_candidates (turn_id, kind, text) VALUES (?, ?, ?)
-        """, ((turn_id, item["kind"], item["text"]) for item in json.loads(result)))
+    def _insert_candidates(db: sqlite3.Connection, turn_id: int, result: str,
+                           *, deduplicate: bool = False) -> None:
+        items = json.loads(result)
+        if not items:
+            return
+        seen = {
+            (kind, _memory_key(text))
+            for kind, text in db.execute("SELECT kind, text FROM memory_candidates")
+        } if deduplicate else set()
+        for item in items:
+            kind, text = item["kind"], item["text"]
+            key = kind, _memory_key(text)
+            if deduplicate and key in seen:
+                continue
+            db.execute("INSERT INTO memory_candidates (turn_id, kind, text) VALUES (?, ?, ?)",
+                       (turn_id, kind, text))
+            seen.add(key)
 
     def list_memories(self, status: str) -> list[tuple[int, str, str, int]]:
         with closing(self._connect()) as db:
@@ -213,3 +239,32 @@ class History:
             # Candidate rows already hold the other suggestions from this job.
             db.execute("UPDATE memory_jobs SET result = NULL WHERE turn_id = ?", row)
             return True
+
+
+    def replace_memory(self, candidate_id: int, approved_id: int) -> bool:
+        with closing(self._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            old = db.execute("""
+                SELECT turn_id, kind FROM memory_candidates WHERE id = ? AND status = 'approved'
+            """, (approved_id,)).fetchone()
+            if old is None:
+                return False
+            updated = db.execute("""
+                UPDATE memory_candidates SET status = 'approved', reviewed_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND kind = ? AND status = 'pending'
+            """, (candidate_id, old[1]))
+            if updated.rowcount != 1:
+                return False
+            db.execute("DELETE FROM memory_candidates WHERE id = ?", (approved_id,))
+            db.execute("UPDATE memory_jobs SET result = NULL WHERE turn_id = ?", (old[0],))
+            return True
+
+
+def _memory_key(text: str) -> tuple[str, ...]:
+    words = re.findall(r"[^\W_]+", unicodedata.normalize("NFKC", text).casefold())
+    for prefix in (["the", "user"], ["user"], ["i"]):
+        if words[:len(prefix)] == prefix:
+            words = words[len(prefix):]
+            break
+    forms = {"prefers": "prefer", "likes": "like", "owns": "own", "has": "have"}
+    return tuple(forms.get(word, word) for word in words)

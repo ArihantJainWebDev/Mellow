@@ -88,7 +88,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             fields = message.split(maxsplit=1)
             fields[0] = fields[0].casefold()
             command = fields[0] if len(fields) == 1 or fields[0] in (
-                "/resume", "/approve", "/reject", "/edit-memory", "/forget",
+                "/resume", "/approve", "/reject", "/edit-memory", "/forget", "/replace-memory",
             ) else message.casefold()
             if command == "/quit":
                 return 0
@@ -100,7 +100,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                     print("/candidates  List pending memory suggestions\n/memories  List approved memories")
                     print("/approve ID  Keep a suggestion\n/reject ID  Dismiss a suggestion")
                     print("/edit-memory ID TEXT  Edit an approved memory\n/forget ID  Remove a memory")
-            elif command in ("/candidates", "/memories", "/approve", "/reject", "/edit-memory", "/forget"):
+                    print("/replace-memory CANDIDATE_ID MEMORY_ID  Approve a correction and replace the old memory")
+            elif command in ("/candidates", "/memories", "/approve", "/reject", "/edit-memory",
+                             "/forget", "/replace-memory"):
                 if history is None:
                     print("Saved memories are unavailable in private mode.")
                 else:
@@ -176,6 +178,19 @@ def _review_command(history: History, command: str, fields: list[str]) -> None:
             # Escape terminal control characters in model output.
             safe_text = "".join(char if char.isprintable() else " " for char in text)
             print(f"{candidate_id} [{kind}] {safe_text} (turn {turn_id})")
+        return
+    if command == "/replace-memory":
+        try:
+            candidate_id, memory_id = map(int, fields[1].split())
+            if not all(1 <= value <= 2**63 - 1 for value in (candidate_id, memory_id)):
+                raise ValueError
+        except (IndexError, ValueError):
+            print("Usage: /replace-memory CANDIDATE_ID MEMORY_ID", file=sys.stderr)
+            return
+        if history.replace_memory(candidate_id, memory_id):
+            print(f"Memory {memory_id} replaced by approved candidate {candidate_id}.")
+        else:
+            print("Provide a pending candidate and an approved memory of the same kind.", file=sys.stderr)
         return
     arguments = fields[1].split(maxsplit=1) if len(fields) == 2 else []
     expected = 2 if command == "/edit-memory" else 1

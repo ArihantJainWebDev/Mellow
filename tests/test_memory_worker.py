@@ -44,7 +44,7 @@ class MemoryWorkerTests(unittest.TestCase):
         release = Event()
         second_reply = Event()
 
-        def extract(model, message):
+        def extract(model, message, *, context):
             if message == "first":
                 started.set()
                 if not release.wait(5):
@@ -105,7 +105,7 @@ class MemoryWorkerTests(unittest.TestCase):
             migrated.finish_turn(turn, "completed", "new reply", enqueue=True)
             stop = Event()
 
-            def offline(*args):
+            def offline(*args, **kwargs):
                 stop.set()
                 raise LocalModelError("Local server is offline")
 

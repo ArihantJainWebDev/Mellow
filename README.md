@@ -99,3 +99,13 @@ available across saved sessions. Use --private to skip saved memory recall.
 
 Recall ranks matches by shared keywords and uses up to three approved
 records per request. For semantic recall, load Nomic Embed Text v1.5 in LM Studio (localhost port 1234) and run python -m mellow --embedding-model MODEL_ID using the loaded model ID. It searches the 100 most recent approved records and falls back to keyword recall when local embeddings are unavailable. Combine it with --memory-model to enable background extraction as well.
+
+The extraction worker includes up to two earlier completed exchanges from
+the same session to interpret short follow-ups. The latest user turn is
+the source of each candidate. Common standalone questions are skipped and
+new candidates with matching normalized wording are suppressed.
+
+To apply a correction, use /candidates and /memories to find the two IDs.
+Run /replace-memory CANDIDATE_ID MEMORY_ID to approve the correction and
+remove the old approved memory of the same kind in one transaction.
+The source conversation remains in history.

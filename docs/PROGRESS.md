@@ -170,3 +170,17 @@ Broader relevance evaluation remains open. All 41 offline tests passed.
 
 The streaming completion budget is now 1,024 tokens. This includes the local
 fix for the earlier blank response that hit the 256-token cap.
+
+### Contextual extraction and corrections
+
+B14 passes the two previous completed exchanges from the same session to the
+local extractor. The prompt uses them only to resolve references. The worker
+skips common standalone questions. Storage suppresses new duplicates based on
+normalized wording, including rejected entries. Corrections remain pending
+for explicit replacement of a selected approved memory.
+
+42 offline tests passed. A live Qwen worker run on fictional data linked
+a one-word bicycle type to its subject, suppressed a repeated fact, skipped
+a question, and saved a correction candidate that replaced the old record
+when confirmed. Paraphrase deduplication and automatic conflict detection
+remain outside this implementation. Next: B15 summaries.

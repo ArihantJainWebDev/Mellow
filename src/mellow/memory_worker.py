@@ -2,6 +2,7 @@
 
 from dataclasses import asdict
 import json
+import re
 import sqlite3
 from threading import Event, Thread
 
@@ -18,7 +19,15 @@ def run_worker(history: History, model: str, stop: Event) -> None:
                 continue
             turn_id, lease, message, attempts = job
             try:
-                suggestions = extract_memories(model, message)
+                if re.fullmatch(
+                    r"(?:do|does|did|am|is|are|was|were|can|could|should|would|will|"
+                    r"has|have|what|which|when|where|who|why|how)\b[^.!?]*\?",
+                    message.strip(), flags=re.IGNORECASE,
+                ):
+                    suggestions = []
+                else:
+                    context = history.extraction_context(turn_id)
+                    suggestions = extract_memories(model, message, context=context)
                 result = json.dumps([asdict(candidate) for candidate in suggestions])
             except LocalModelError:
                 result = None
