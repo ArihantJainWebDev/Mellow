@@ -1,6 +1,6 @@
 # Project charter
 
-Status: agreed vision; B01 foundation implemented and verified 2026-11-10. Later blocks remain planned.
+Product baseline adopted 2026-11-22. The [roadmap](ROADMAP.md) defines scope, sequence and release gates.
 
 ## Purpose
 
@@ -16,7 +16,7 @@ A goal is a substantial release. API integration, database setup, and retrieval 
 
 ## Future vision, outside Goal 1
 
-Desktop presence; permitted OS/activity awareness; habit understanding; proactive conversations; microphone and speech output; camera and screen context; laptop actions; browser tools; authenticated phone access. Later goals will be defined after Goal 1. Their ordering and version numbers are not committed.
+Desktop presence; permitted OS/activity awareness; habit understanding; proactive conversations; microphone and speech output; camera and screen context; laptop actions; browser tools; authenticated phone access. See the five agreed goals in the roadmap.
 
 ## Working agreement
 
@@ -32,7 +32,7 @@ Desktop presence; permitted OS/activity awareness; habit understanding; proactiv
 
 ## Environment baseline
 
-Windows laptop; 12 GB DDR5 RAM; RTX 3050 with 6 GB VRAM, reported 95 W TGP. LM Studio preferred; Groq provides hosted conversation. Python 3.14.7 and Git 2.55.0.windows.5 are available. A project-local virtual environment and editable install work. LM Studio availability, installed inference models, Groq access, and conversational performance remain unverified.
+Windows laptop; 12 GB DDR5 RAM; RTX 3050 with 6 GB VRAM, reported 95 W TGP. LM Studio preferred; Groq provides hosted conversation. Python 3.14.7 and Git 2.55.0.windows.5 are available. A project-local virtual environment and editable install work. See the progress log for dated live checks. Measure current availability and performance before release.
 
 ## Change process
 

@@ -1,10 +1,8 @@
 # Goal 1 implementation and learning plan
 
-Status: agreed phase outline; block details remain adjustable. B01 implemented and software-verified; C01 learning assessment pending. Workflow updated 2026-11-10: assistant implements and tests; owner learns file responsibilities, important functions, and system connections through concise walkthroughs.
-
 ## Current checkpoint
 
-B01 is implemented; see [FOUNDATION.md](FOUNDATION.md) for file/function map and evidence. B02 is now implemented and offline-tested; see [GROQ_REQUEST.md](GROQ_REQUEST.md). Local key setup and live verification are next. No live Groq call has been made.
+B01–B15 form the existing baseline. See [Progress](PROGRESS.md) for evidence and outstanding acceptance. The [roadmap](ROADMAP.md) extends the remaining B16–B17 work with automatic continuity, opt-in automatic memory, natural corrections, and source-aware forgetting. Implement those in roadmap order before tagging v0.1.
 
 ## Phase 1 — foundation
 
@@ -55,6 +53,6 @@ For every completed block record: purpose, legacy functions consulted, files cre
 
 ## Git and release workflow
 
-Use local Git commits during Goal 1 once initialized. Do not silently overwrite existing remotes or create repositories/commits before their block. Publish the new codebase on completion of Goal 1; remote name/visibility remain pending. Tag the verified release `v0.1`. Subsequent substantial goals use `codex/goal-2-<scope>` or another owner-chosen branch, a reviewable PR, verification, merge to `main`, and a new version tag.
+Use the existing GitHub repository and batch related changes. Tag Goal 1 after release acceptance. Branch, review, merge and tag each later goal.
 
 No fixed completion date is promised. Avoid unnecessary abstractions and repeated low-value exercises; progress is driven by working behavior and understanding.

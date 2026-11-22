@@ -90,3 +90,7 @@ B01 created `pyproject.toml`, `.gitignore`, `.env.example`, the package initiali
 ## Pending technical selections
 
 Python version, HTTP/SDK choice, CLI library, exact local and Groq models, embedding model/artifact licensing, context budgets, queue capacity, timeout values, default memory review policy, and runtime-data directory. Select through small comparisons and record decisions rather than copying legacy defaults.
+
+## Planned cross-release boundaries
+
+CLI and avatar share conversation, SQLite history and memory services. Sensor adapters publish permission-scoped observations. An attention controller translates actual work into avatar states. Connectors supply provenance-linked updates. Desktop and paired-phone requests share an authorization and action service. Introduce each boundary with its roadmap goal. Current implementation remains CLI-only.

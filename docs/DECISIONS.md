@@ -53,3 +53,7 @@ The user questioned the initial model's availability. Verified Groq's deprecatio
 ## D020 — streaming — 2026-11-19
 
 Implemented B03 using urllib SSE events and a closing generator, retaining the existing HTTP approach without new dependencies. Normal completion requires an explicit stop finish reason and [DONE]; unexpected EOF, truncation, bad events, and read errors report failure rather than masquerading as successful text. CLI flushes each content chunk and explicitly marks partial output on interruption. Retain non-streamed reply() for existing contract tests temporarily; consolidate shared request/error handling if both paths remain supported. Timeout remains per socket operation, not an overall deadline; remote billing cancellation cannot be guaranteed.
+
+## 2026-11-22 product baseline
+
+Adopt the five-goal [roadmap](ROADMAP.md) and [visual references](visuals/README.md). Automatic continuity and opt-in automatic memory supersede manual resume and mandatory review as target defaults. Preserve optional controls. Flag scope drift before implementation and record explicit plan revisions here.

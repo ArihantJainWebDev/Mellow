@@ -196,3 +196,7 @@ The same milestone adds schema v4, job error reporting in /jobs and
 manual recovery with /retry-job. The automated suite passed 44 tests,
 including resume with older context, clear/private isolation, source
 removal, schema migration and retry. Combined live acceptance is pending.
+
+## 2026-11-22 planning checkpoint
+
+Recorded five release goals and archived six original visual references. Next implementation block is saved settings and automatic continuation, with existing history, private isolation and restart coverage. No new runtime or learning result claimed.

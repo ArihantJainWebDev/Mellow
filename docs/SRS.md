@@ -50,7 +50,7 @@ Mellow is a single-user CLI companion with a configurable personality and contro
 
 ## Data behavior
 
-Application data belongs to the user. Public source and demo data must be separate from personal runtime data. Conversation retention defaults and an export format remain open decisions. Automatic memory formation must have a clear visible setting; its default and review workflow will be agreed before implementation.
+Application data belongs to the user. Public source and demo data must be separate from personal runtime data. Conversation retention defaults and an export format remain open decisions. After the owner enables automatic memory, clear eligible user statements can enter recall without per-fact approval. Keep ambiguous or sensitive items out of automatic recall. Ordinary startup continues the prior conversation. Natural-language correction and forgetting are release requirements. See the [acceptance scenario](ROADMAP.md).
 
 Deleting history must remove source-linked derived memories and dependent summaries, invalidate embeddings/cache, and cancel or invalidate affected jobs. Deleting only a memory while retaining its source requires a minimal suppression mechanism; metadata and its privacy implications must be documented. Never use a prompt-level 'forget' instruction as the deletion mechanism.
 

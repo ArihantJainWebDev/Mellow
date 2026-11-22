@@ -2,7 +2,7 @@
 
 Mellow is a personal companion intended to live alongside its owner in their operating system, understand their preferences and experiences, and eventually support voice, visual context, and useful actions.
 
-This folder starts a new implementation. The original Mellow-Gyrlick project remains a read-only learning reference. B01 and the B02 one-message Groq path are implemented. Fourteen offline tests pass on Python 3.14.7 / Windows. One real Groq response is confirmed by a user-provided terminal transcript on 2026-11-12; model identity, latency, and token usage were not independently measured. B03 streaming is implemented and live-verified (2026-11-19); B04 adds a personality prompt and recent session context. Chat history is saved locally and approved memories support keyword recall. See [streaming walkthrough](docs/STREAMING.md).
+The current CLI has streaming chat, saved sessions, background extraction, candidate review and approved-memory retrieval. Start with the [five-goal roadmap](docs/ROADMAP.md), [avatar references](docs/visuals/README.md) and [implementation evidence](docs/PROGRESS.md).
 
 ## Run the foundation
 
