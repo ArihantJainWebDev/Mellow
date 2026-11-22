@@ -38,3 +38,7 @@ Straightforward supported statements such as “I own a red bicycle”, “I sol
 The demo uses a temporary fictional database and your configured Groq and local models. It incurs hosted token usage. See [release evidence](docs/GOAL_1_RELEASE.md), [architecture](docs/ARCHITECTURE.md), and [visual references](docs/visuals/README.md).
 
 Project code uses the [MIT license](LICENSE). Model weights, LM Studio, Groq and installed dependencies are separately distributed under their own terms.
+
+## Desktop ghost preview (Windows)
+
+Run `python -m mellow.avatar` in a dedicated terminal. The click-through 3D ghost rests above the primary taskbar, blinks and walks after eight seconds. Use Ctrl+C in the launching terminal to exit. Windows PowerShell loads the bundled WPF mesh and animation code. This prototype runs separately from chat. [Actual desktop-size render](docs/visuals/prototype-idle.png).

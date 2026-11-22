@@ -208,3 +208,7 @@ SQLite v5 persists the active conversation across restart, manual resume and exp
 ## 2026-11-22 release
 
 Goal 1 release checks, limitations, and walkthrough are in [the release record](GOAL_1_RELEASE.md). Personal acceptance remains pending.
+
+## Goal 2 first desktop prototype
+
+Owner verified Goal 1 continuity, fresh-chat recall, correction and forgetting using the CLI. On the Goal 2 branch the native WPF prototype renders a hierarchical 3D ghost with procedural body, limbs and blink poses. The Windows smoke run rendered 52 animation ticks, retained the original foreground window, and verified passive window flags. All 48 existing CLI tests passed. Size, silhouette and movement await owner review beside the approved artwork. The proposed live memory observatory remains in the Goal 4 dashboard backlog.

@@ -16,3 +16,6 @@ mellow = "mellow.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+mellow = ["desktop/*.cs", "desktop/*.ps1"]
