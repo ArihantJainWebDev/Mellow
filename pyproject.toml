@@ -4,7 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mellow-companion"
-version = "0.1.0.dev0"
+version = "0.1.0"
+license = "MIT"
 description = "A personal CLI companion, rebuilt one understandable block at a time."
 readme = "README.md"
 requires-python = ">=3.11"

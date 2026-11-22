@@ -57,3 +57,7 @@ Implemented B03 using urllib SSE events and a closing generator, retaining the e
 ## 2026-11-22 product baseline
 
 Adopt the five-goal [roadmap](ROADMAP.md) and [visual references](visuals/README.md). Automatic continuity and opt-in automatic memory supersede manual resume and mandatory review as target defaults. Preserve optional controls. Flag scope drift before implementation and record explicit plan revisions here.
+
+## 2026-11-22 release
+
+Use MIT for project code. Direct ordinary statements can be saved locally. Ambiguous material stays in review. Local model classification is fallible. Retain exportable source text on recall suppression and provide separate physical record deletion controls.

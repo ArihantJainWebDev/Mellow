@@ -9,7 +9,9 @@ import sqlite3
 import time
 from uuid import uuid4
 
-SCHEMA_VERSION = 5
+from mellow.memory_policy import statement, words
+
+SCHEMA_VERSION = 6
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -85,7 +87,16 @@ class History:
                 )""")
                 db.execute("""INSERT OR IGNORE INTO active_chat VALUES
                     (1, (SELECT session_id FROM turns ORDER BY id DESC LIMIT 1))""")
-                db.execute("PRAGMA user_version = 5")
+                version = 5
+            if version == 5:
+                db.execute("""CREATE TABLE IF NOT EXISTS automatic_memories (
+                    slot TEXT PRIMARY KEY, memory_id INTEGER UNIQUE NOT NULL
+                    REFERENCES memory_candidates(id) ON DELETE CASCADE)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS hidden_turns (
+                    turn_id INTEGER PRIMARY KEY REFERENCES turns(id) ON DELETE CASCADE)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS automatic_jobs (
+                    turn_id INTEGER PRIMARY KEY REFERENCES memory_jobs(turn_id) ON DELETE CASCADE)""")
+                db.execute("PRAGMA user_version = 6")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -102,6 +113,96 @@ class History:
         with closing(self._connect()) as db, db:
             db.execute("UPDATE active_chat SET session_id = ? WHERE singleton = 1", (session_id,))
 
+    def remember(self, session_id: int | None, text: str) -> int:
+        with closing(self._connect()) as db, db:
+            if session_id is None:
+                session_id = db.execute("INSERT INTO sessions DEFAULT VALUES").lastrowid
+            db.execute("UPDATE active_chat SET session_id=? WHERE singleton=1", (session_id,))
+            turn = db.execute("""INSERT INTO turns(session_id,user_text,reply_text,status,finished_at)
+                VALUES(?, ?, 'Saved at your request.', 'completed', CURRENT_TIMESTAMP)""",
+                (session_id, "Remember that " + text)).lastrowid
+            db.execute("""INSERT INTO memory_candidates(turn_id,kind,text,status)
+                          VALUES(?, 'fact', ?, 'approved')""", (turn,text))
+        return session_id
+
+    def correct_statement(self, previous: str, replacement: str) -> bool:
+        """Change one uniquely identified record without guessing between matches."""
+        with closing(self._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute("SELECT id, turn_id, text FROM memory_candidates WHERE status='approved'").fetchall()
+            matches = [(mid, turn) for mid, turn, text in rows
+                       if _memory_key(previous) == _memory_key(text)]
+            if len(matches) != 1:
+                return False
+            mid, turn = matches[0]
+            session = db.execute("SELECT session_id FROM turns WHERE id=?", (turn,)).fetchone()[0]
+            source = db.execute("""INSERT INTO turns(session_id,user_text,reply_text,status,finished_at)
+                               VALUES(?, ?, 'Correction recorded.', 'completed', CURRENT_TIMESTAMP)""",
+                               (session, replacement)).lastrowid
+            db.execute("UPDATE memory_candidates SET text=?,turn_id=?,reviewed_at=CURRENT_TIMESTAMP WHERE id=?",
+                       (replacement, source, mid))
+            db.execute("UPDATE memory_jobs SET result=NULL WHERE turn_id=?", (turn,))
+            return True
+
+    def delete_session(self, session_id: int) -> bool:
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM turns WHERE session_id = ?", (session_id,))
+            return db.execute("DELETE FROM sessions WHERE id = ?", (session_id,)).rowcount == 1
+
+    def reset(self) -> None:
+        with closing(self._connect()) as db, db:
+            db.execute("DELETE FROM turns")
+            db.execute("DELETE FROM sessions")
+
+    def export(self, path: Path) -> None:
+        tables = ("sessions", "turns", "active_chat", "memory_candidates", "memory_jobs",
+                  "automatic_memories", "hidden_turns")
+        with closing(self._connect()) as db:
+            db.execute("BEGIN")
+            db.row_factory = sqlite3.Row
+            snapshot = {table: [dict(row) for row in db.execute(f"SELECT * FROM {table}")]
+                        for table in tables}
+        content = json.dumps(snapshot, ensure_ascii=False, indent=2)
+        with path.open("x", encoding="utf-8") as output:
+            output.write(content)
+
+    def forget_topic(self, phrase: str) -> int:
+        terms = words(phrase) - {"a", "an", "the", "my", "about", "please", "me", "that"}
+        if not terms:
+            return 0
+        with closing(self._connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            # Hide subsequent context in each affected session too: replies like
+            # "yes, that one" can otherwise reconstruct the forgotten detail.
+            starts = {}
+            for turn, session, user, reply in db.execute(
+                    "SELECT id, session_id, user_text, reply_text FROM turns ORDER BY id"):
+                if terms <= words(user + " " + reply):
+                    starts.setdefault(session, turn)
+            matched = []
+            for turn, session, text, memory_id in db.execute("""SELECT t.id, t.session_id, m.text, m.id
+                    FROM memory_candidates m JOIN turns t ON t.id=m.turn_id"""):
+                if terms <= words(text):
+                    matched.append((memory_id,))
+                    starts[session] = min(turn, starts.get(session, turn))
+            for session, first in starts.items():
+                db.execute("""INSERT OR IGNORE INTO hidden_turns SELECT id FROM turns
+                              WHERE session_id = ? AND id >= ?""", (session, first))
+            if starts:
+                db.execute("DELETE FROM memory_jobs WHERE turn_id IN (SELECT turn_id FROM hidden_turns)")
+                db.executemany("DELETE FROM memory_candidates WHERE id=?", matched)
+                # Unreviewed interpretations of hidden source text have no
+                # independent authority; discard them as well.
+                db.execute("""DELETE FROM memory_candidates WHERE turn_id IN
+                    (SELECT id FROM turns WHERE id IN (SELECT turn_id FROM hidden_turns))
+                    AND id NOT IN (SELECT memory_id FROM automatic_memories)
+                    AND NOT EXISTS (SELECT 1 FROM turns t WHERE t.id=memory_candidates.turn_id
+                        AND (t.user_text=memory_candidates.text OR
+                             t.user_text='Remember that ' || memory_candidates.text))""")
+                db.execute("""DELETE FROM memory_candidates WHERE status='pending'
+                              AND turn_id IN (SELECT turn_id FROM hidden_turns)""")
+            return len(starts)
+
     def list_sessions(self) -> list[tuple[int, str, int]]:
         with closing(self._connect()) as db:
             return db.execute("""
@@ -116,7 +217,7 @@ class History:
                 return None
             rows = db.execute("""
                 SELECT user_text, reply_text FROM turns
-                WHERE session_id = ? AND status = 'completed'
+                WHERE session_id = ? AND status = 'completed' AND id NOT IN (SELECT turn_id FROM hidden_turns)
                 ORDER BY id DESC LIMIT ?
             """, (session_id, limit)).fetchall()
         return rows[::-1]
@@ -126,7 +227,7 @@ class History:
         with closing(self._connect()) as db:
             rows = db.execute("""
                 SELECT id, SUBSTR(user_text, 1, 161), SUBSTR(reply_text, 1, 101)
-                FROM turns WHERE session_id = ? AND status = 'completed'
+                FROM turns WHERE session_id = ? AND status = 'completed' AND id NOT IN (SELECT turn_id FROM hidden_turns)
                 ORDER BY id DESC LIMIT ? OFFSET ?
             """, (session_id, limit, skip)).fetchall()
         return rows[::-1]
@@ -142,7 +243,7 @@ class History:
             ).lastrowid
         return session_id, turn_id
 
-    def finish_turn(self, turn_id: int, status: str, reply: str, *, enqueue: bool = False) -> bool:
+    def finish_turn(self, turn_id: int, status: str, reply: str, *, enqueue: bool = False, automatic: bool = False) -> bool:
         if status not in {"completed", "failed", "interrupted"}:
             raise ValueError("Expected a final reply status.")
         with closing(self._connect()) as db, db:
@@ -154,12 +255,39 @@ class History:
             if result.rowcount != 1:
                 raise sqlite3.DatabaseError("Turn is missing or already finalized.")
 
-            if enqueue and status == "completed":
-                return db.execute("""
+            visible = not db.execute("SELECT 1 FROM hidden_turns WHERE turn_id=?", (turn_id,)).fetchone()
+            if enqueue and visible and status == "completed":
+                message = db.execute("SELECT user_text FROM turns WHERE id = ?", (turn_id,)).fetchone()[0]
+                direct = statement(message)
+                if automatic and message.strip().casefold().rstrip(".!") in {"i sold it", "actually, i sold it"}:
+                    session = db.execute("SELECT session_id FROM turns WHERE id = ?", (turn_id,)).fetchone()[0]
+                    prior = db.execute("""SELECT m.text FROM automatic_memories a
+                        JOIN memory_candidates m ON a.memory_id=m.id
+                        JOIN turns t ON t.id=m.turn_id WHERE t.session_id=? AND a.slot LIKE 'ownership:%'
+                        AND t.id=(SELECT MAX(id) FROM turns WHERE session_id=? AND id<? AND status='completed')
+                        """, (session, session, turn_id)).fetchone()
+                    if prior:
+                        owned = re.fullmatch(r"(?:actually,? )?I own (.+)", prior[0], re.I)
+                        if owned:
+                            direct = statement("I sold " + owned[1])
+                if automatic and direct:
+                    old = db.execute("SELECT memory_id FROM automatic_memories WHERE slot = ?",
+                                     (direct.slot,)).fetchone()
+                    if old:
+                        db.execute("DELETE FROM memory_candidates WHERE id = ?", old)
+                    memory_id = db.execute("""INSERT INTO memory_candidates
+                        (turn_id, kind, text, status) VALUES (?, ?, ?, 'approved')""",
+                        (turn_id, direct.kind, direct.text)).lastrowid
+                    db.execute("INSERT INTO automatic_memories VALUES (?, ?)", (direct.slot, memory_id))
+                    return True
+                queued = db.execute("""
                     INSERT INTO memory_jobs (turn_id)
                     SELECT ? WHERE (SELECT COUNT(*) FROM memory_jobs
                                     WHERE status IN ('queued', 'running')) < ?
                 """, (turn_id, MAX_ACTIVE_JOBS)).rowcount == 1
+                if automatic and queued:
+                    db.execute("INSERT INTO automatic_jobs VALUES (?)", (turn_id,))
+                return queued
             return False
 
     def claim_memory_job(self) -> tuple[int, str, str, int] | None:
@@ -188,6 +316,10 @@ class History:
             """, (lease, now + LEASE_SECONDS, turn_id))
             return turn_id, lease, message, attempts + 1
 
+    def allows_automatic_job(self, turn_id: int) -> bool:
+        with closing(self._connect()) as db:
+            return db.execute("SELECT 1 FROM automatic_jobs WHERE turn_id=?", (turn_id,)).fetchone() is not None
+
     def extraction_context(self, turn_id: int) -> list[tuple[str, str]]:
         with closing(self._connect()) as db:
             rows = db.execute("""
@@ -195,13 +327,13 @@ class History:
                 FROM turns AS current JOIN turns AS earlier
                   ON current.session_id = earlier.session_id
                 WHERE current.id = ? AND earlier.id < current.id
-                  AND earlier.status = 'completed'
+                  AND earlier.status = 'completed' AND earlier.id NOT IN (SELECT turn_id FROM hidden_turns)
                 ORDER BY earlier.id DESC LIMIT 2
             """, (turn_id,)).fetchall()
         return [(user[:400], reply[:400]) for user, reply in reversed(rows)]
 
     def finish_memory_job(self, turn_id: int, lease: str, attempts: int,
-                          result: str | None, *, error: str | None = None) -> None:
+                          result: str | None, *, error: str | None = None, ordinary: bool = False) -> None:
         status = "completed" if result is not None else ("failed" if attempts >= MAX_ATTEMPTS else "queued")
         with closing(self._connect()) as db, db:
             updated = db.execute("""
@@ -209,6 +341,14 @@ class History:
                 WHERE turn_id = ? AND status = 'running' AND lease = ?
             """, (status, time.time() + 5 * attempts, result, error, turn_id, lease))
             if updated.rowcount == 1 and result is not None:
+                if ordinary and db.execute("SELECT 1 FROM automatic_jobs WHERE turn_id=?", (turn_id,)).fetchone():
+                    source = db.execute("SELECT user_text FROM turns WHERE id=?", (turn_id,)).fetchone()[0]
+                    items = json.loads(result)
+                    if len(items) == 1:
+                        self._insert_candidates(db, turn_id, json.dumps([
+                            {"kind": items[0]["kind"], "text": source}]), deduplicate=True)
+                        db.execute("UPDATE memory_candidates SET status='approved' WHERE turn_id=?", (turn_id,))
+                        return
                 self._insert_candidates(db, turn_id, result, deduplicate=True)
 
     @staticmethod
@@ -283,8 +423,13 @@ class History:
             """, (candidate_id,)).fetchone()
             if row is None:
                 return False
-            # Candidate rows already hold the other suggestions from this job.
-            db.execute("UPDATE memory_jobs SET result = NULL WHERE turn_id = ?", row)
+            # Keep the exportable source, but exclude this exchange and later
+            # pronoun-dependent turns from prompts and invalidate their leases.
+            db.execute("""INSERT OR IGNORE INTO hidden_turns SELECT t.id FROM turns t
+                          JOIN turns source ON source.session_id=t.session_id
+                          WHERE source.id=? AND t.id>=source.id""", row)
+            db.execute("""UPDATE memory_jobs SET result=NULL, lease=NULL, status='completed'
+                          WHERE turn_id IN (SELECT turn_id FROM hidden_turns)""")
             return True
 
 

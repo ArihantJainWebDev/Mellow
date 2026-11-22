@@ -33,7 +33,7 @@ def reply(settings: Settings, message: str) -> str:
         headers={
             "Authorization": f"Bearer {settings.groq_api_key}",
             "Content-Type": "application/json",
-            "User-Agent": "Mellow/0.1.0.dev0",
+            "User-Agent": "Mellow/0.1.0",
         },
         method="POST",
     )
@@ -110,7 +110,7 @@ def stream_reply(
             "Authorization": f"Bearer {settings.groq_api_key}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
-            "User-Agent": "Mellow/0.1.0.dev0",
+            "User-Agent": "Mellow/0.1.0",
         },
         method="POST",
     )

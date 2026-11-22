@@ -204,3 +204,7 @@ Recorded five release goals and archived six original visual references. Next im
 ## Automatic continuation and saved models
 
 SQLite v5 persists the active conversation across restart, manual resume and explicit fresh starts. Existing databases select the session containing the most recent turn on upgrade. Saved local model preferences apply to ordinary chats. Verified with 45 offline tests on temporary data. Live provider checks remain pending. Next block is automatic memory with natural corrections.
+
+## 2026-11-22 release
+
+Goal 1 release checks, limitations, and walkthrough are in [the release record](GOAL_1_RELEASE.md). Personal acceptance remains pending.

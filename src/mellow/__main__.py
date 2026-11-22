@@ -3,6 +3,7 @@
 import argparse
 from contextlib import closing
 from pathlib import Path
+import re
 import sqlite3
 import sys
 
@@ -79,6 +80,8 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 conversation.record(user_text, reply_text)
             print(f"Continuing session {session_id}. Use /new for a fresh conversation.")
         print("Chat is saved locally to data/history.db. Older session excerpts and relevant approved memories are sent to Groq.")
+        print("Memory extraction and direct fact saving:", "on" if extract_memory else "off")
+        print("Semantic recall:", "configured" if semantic else "off (keyword recall)")
         print("Use --private to skip saved history and memories.")
     print("Type /help for commands or /quit to leave.")
     while True:
@@ -92,7 +95,54 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             return 130
         if not message:
             continue
+        correction = re.fullmatch(r"change my memory from (.{1,300}?) to (.{1,300})", message, re.I)
+        if correction and history is not None:
+            if history.correct_statement(correction[1], correction[2]):
+                print("Correction saved.")
+            else:
+                print("No unique match. Check /memories for the original wording.")
+            continue
+        remember = re.fullmatch(r"remember that (.{1,300})", message, re.I)
+        if remember and history is not None:
+            session_id = history.remember(session_id, remember[1])
+            print("Saved at your request.")
+            continue
+        forget = re.fullmatch(r"forget (?:about )?(.+?)[.!]?", message, re.I)
+        if forget and history is not None:
+            count = history.forget_topic(forget[1])
+            conversation.clear()
+            if count:
+                print("Forgot matching context. Matching memories and subsequent chat context are excluded from recall. Source chats remain in your export.")
+            else:
+                print("No matching saved topic. Try the wording from /memories or delete its session.")
+            continue
         if message.startswith("/"):
+            if message.startswith(("/export ", "/delete-session ", "/reset")):
+                if history is None:
+                    print("Saved data controls are unavailable in private mode.")
+                    continue
+                action, _, value = message.partition(" ")
+                if action == "/export":
+                    try:
+                        history.export(Path(value.strip()))
+                        print("Export saved. It contains personal history.")
+                    except (OSError, ValueError):
+                        print("Choose a new writable export filename.")
+                elif action == "/reset" and value == "CONFIRM":
+                    history.reset()
+                    session_id = None
+                    conversation.clear()
+                    print("All saved history and memories deleted.")
+                elif action == "/delete-session" and re.fullmatch(r"[1-9][0-9]{0,17} CONFIRM", value):
+                    target = int(value.split()[0])
+                    removed = history.delete_session(target)
+                    if target == session_id:
+                        session_id = None
+                        conversation.clear()
+                    print("Session deleted." if removed else "Session not found.")
+                else:
+                    print("Use /delete-session ID CONFIRM or /reset CONFIRM.")
+                continue
             fields = message.split(maxsplit=1)
             fields[0] = fields[0].casefold()
             command = fields[0] if len(fields) == 1 or fields[0] in (
@@ -104,6 +154,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 print("/help  Show commands\n/new or /clear  Start a fresh conversation\n/quit  Exit Mellow")
                 if history is not None:
                     print("/sessions  List saved sessions\n/resume ID  Resume a saved session")
+                    print("/export PATH  Export personal data to a new file\n/delete-session ID CONFIRM  Delete a chat and derived data\n/reset CONFIRM  Delete all saved data\nForget TOPIC  Exclude matching and subsequent context from recall")
                     print("/summary  Show older context for this session")
                     print("/jobs  Show memory job counts and recent failures")
                     print("/retry-job TURN_ID  Requeue a failed extraction")
@@ -186,6 +237,14 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 print("Unknown command. Type /help for available commands.", file=sys.stderr)
             continue
         if history is not None:
+            # Rebuild from committed, visible turns so another CLI's deletion
+            # or forget operation also applies to this open conversation.
+            recent = history.recent_completed(session_id, RECENT_EXCHANGES) if session_id else None
+            if recent is None:
+                session_id = None
+            conversation.clear()
+            for user_text, reply_text in recent or ():
+                conversation.record(user_text, reply_text)
             session_id, turn_id = history.start_turn(session_id, message)
         context = conversation.context()
         if history is not None:
@@ -199,7 +258,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
         status, answer = _render(settings, message, context=context)
         if history is not None:
             outcome = {0: "completed", 1: "failed", 130: "interrupted"}[status]
-            queued = history.finish_turn(turn_id, outcome, answer, enqueue=extract_memory)
+            queued = history.finish_turn(turn_id, outcome, answer, enqueue=extract_memory, automatic=extract_memory)
             if extract_memory and status == 0 and not queued:
                 print("Memory queue is full. This turn was saved without an extraction job.", file=sys.stderr)
         if status == 0:

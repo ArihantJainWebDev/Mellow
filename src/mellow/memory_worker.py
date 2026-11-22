@@ -6,7 +6,7 @@ import re
 import sqlite3
 from threading import Event, Thread
 
-from mellow.providers.lmstudio import LocalModelError, extract_memories
+from mellow.providers.lmstudio import LocalModelError, extract_memories, ordinary_assertion
 from mellow.storage import History
 
 
@@ -19,6 +19,7 @@ def run_worker(history: History, model: str, stop: Event) -> None:
                 continue
             turn_id, lease, message, attempts = job
             error = None
+            ordinary = False
             try:
                 if re.fullmatch(
                     r"(?:do|does|did|am|is|are|was|were|can|could|should|would|will|"
@@ -29,11 +30,13 @@ def run_worker(history: History, model: str, stop: Event) -> None:
                 else:
                     context = history.extraction_context(turn_id)
                     suggestions = extract_memories(model, message, context=context)
+                if len(suggestions) == 1 and history.allows_automatic_job(turn_id):
+                    ordinary = ordinary_assertion(model, message)
                 result = json.dumps([asdict(candidate) for candidate in suggestions])
             except LocalModelError as failure:
                 result = None
                 error = str(failure)
-            history.finish_memory_job(turn_id, lease, attempts, result, error=error)
+            history.finish_memory_job(turn_id, lease, attempts, result, error=error, ordinary=ordinary)
         except sqlite3.Error:
             # A claimed job can be recovered after its lease expires.
             stop.wait(1)

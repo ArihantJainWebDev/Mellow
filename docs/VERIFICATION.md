@@ -45,3 +45,7 @@ Starting prompt budgets only: roughly 1,000–2,500 Groq input tokens and 100–
 ## Evidence record template
 
 Date / block / requirement IDs / implementation revision / command or manual steps / fictional fixture version / provider and model / expected result / actual result / measurements / limitations / pass-fail.
+
+## 2026-11-22 release
+
+See [Goal 1 release evidence](GOAL_1_RELEASE.md) for the executed software checks and remaining owner assessment.
