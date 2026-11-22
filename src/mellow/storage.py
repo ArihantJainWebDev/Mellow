@@ -9,7 +9,7 @@ import sqlite3
 import time
 from uuid import uuid4
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -77,7 +77,15 @@ class History:
                 version = 3
             if version == 3:
                 db.execute("ALTER TABLE memory_jobs ADD COLUMN last_error TEXT")
-                db.execute("PRAGMA user_version = 4")
+                version = 4
+            if version == 4:
+                db.execute("""CREATE TABLE IF NOT EXISTS active_chat (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL
+                )""")
+                db.execute("""INSERT OR IGNORE INTO active_chat VALUES
+                    (1, (SELECT session_id FROM turns ORDER BY id DESC LIMIT 1))""")
+                db.execute("PRAGMA user_version = 5")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -85,6 +93,14 @@ class History:
         db = sqlite3.connect(self.path)
         db.execute("PRAGMA foreign_keys = ON")
         return db
+
+    def active_session(self) -> int | None:
+        with closing(self._connect()) as db:
+            return db.execute("SELECT session_id FROM active_chat WHERE singleton = 1").fetchone()[0]
+
+    def select_session(self, session_id: int | None) -> None:
+        with closing(self._connect()) as db, db:
+            db.execute("UPDATE active_chat SET session_id = ? WHERE singleton = 1", (session_id,))
 
     def list_sessions(self) -> list[tuple[int, str, int]]:
         with closing(self._connect()) as db:
@@ -119,6 +135,7 @@ class History:
         with closing(self._connect()) as db, db:
             if session_id is None:
                 session_id = db.execute("INSERT INTO sessions DEFAULT VALUES").lastrowid
+            db.execute("UPDATE active_chat SET session_id = ? WHERE singleton = 1", (session_id,))
             turn_id = db.execute(
                 "INSERT INTO turns (session_id, user_text) VALUES (?, ?)",
                 (session_id, message),

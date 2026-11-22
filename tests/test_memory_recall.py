@@ -31,7 +31,7 @@ class MemoryRecallTests(unittest.TestCase):
                 patch("mellow.__main__.History", side_effect=lambda _: History(path)),
                 patch("mellow.__main__.stream_reply", side_effect=lambda *a, **kw: iter_reply()) as send,
                 patch("builtins.input", side_effect=[
-                    "Do I prefer short answers?", f"/edit-memory {first[0]} I prefer Long Answers",
+                    "/new", "Do I prefer short answers?", f"/edit-memory {first[0]} I prefer Long Answers",
                     "/clear", "Do I prefer long answers?", f"/forget {first[0]}",
                     "/clear", "Do I prefer long answers?", "/quit",
                     "Do I own a bicycle?", "/quit",

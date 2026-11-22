@@ -123,3 +123,9 @@ Use /jobs to list recent failed extraction jobs, including the last
 recorded reason when available. After resolving the issue, use
 /retry-job TURN_ID to requeue that job. A worker launched with
 --memory-model processes it. Existing failed jobs may lack a reason.
+
+### Everyday startup
+
+Run `python -m mellow` to continue the active saved conversation. On the first upgrade Mellow selects the session containing the latest turn. Use `/new` to start fresh, or `/resume ID` to switch. Approved memories remain available across saved chats. Private chat leaves the saved selection untouched.
+
+Set MELLOW_MEMORY_MODEL and MELLOW_EMBEDDING_MODEL once in your local .env using your LM Studio model IDs. Command-line flags override environment variables, which override the file. Private and single-message runs ignore saved local-model choices.

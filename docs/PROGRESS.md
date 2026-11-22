@@ -200,3 +200,7 @@ removal, schema migration and retry. Combined live acceptance is pending.
 ## 2026-11-22 planning checkpoint
 
 Recorded five release goals and archived six original visual references. Next implementation block is saved settings and automatic continuation, with existing history, private isolation and restart coverage. No new runtime or learning result claimed.
+
+## Automatic continuation and saved models
+
+SQLite v5 persists the active conversation across restart, manual resume and explicit fresh starts. Existing databases select the session containing the most recent turn on upgrade. Saved local model preferences apply to ordinary chats. Verified with 45 offline tests on temporary data. Live provider checks remain pending. Next block is automatic memory with natural corrections.

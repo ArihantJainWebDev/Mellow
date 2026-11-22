@@ -48,10 +48,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         history = None if arguments.private else History(Path("data/history.db"))
-        semantic = SemanticRecall(arguments.embedding_model) if arguments.embedding_model else None
-        if history is None or not arguments.memory_model:
+        memory_model = arguments.memory_model or settings.memory_model
+        embedding_model = arguments.embedding_model or settings.embedding_model
+        semantic = SemanticRecall(embedding_model) if history is not None and embedding_model else None
+        if history is None or not memory_model:
             return _chat(settings, history, semantic=semantic)
-        stop, worker = start_worker(history, arguments.memory_model)
+        stop, worker = start_worker(history, memory_model)
         try:
             return _chat(settings, history, extract_memory=True, semantic=semantic)
         finally:
@@ -71,6 +73,11 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
     if history is None:
         print("This session is kept off disk.")
     else:
+        session_id = history.active_session()
+        if session_id is not None:
+            for user_text, reply_text in history.recent_completed(session_id, RECENT_EXCHANGES) or ():
+                conversation.record(user_text, reply_text)
+            print(f"Continuing session {session_id}. Use /new for a fresh conversation.")
         print("Chat is saved locally to data/history.db. Older session excerpts and relevant approved memories are sent to Groq.")
         print("Use --private to skip saved history and memories.")
     print("Type /help for commands or /quit to leave.")
@@ -94,7 +101,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             if command == "/quit":
                 return 0
             if command == "/help":
-                print("/help  Show commands\n/clear Clear recent conversation\n/quit  Exit Mellow")
+                print("/help  Show commands\n/new or /clear  Start a fresh conversation\n/quit  Exit Mellow")
                 if history is not None:
                     print("/sessions  List saved sessions\n/resume ID  Resume a saved session")
                     print("/summary  Show older context for this session")
@@ -166,9 +173,12 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                     conversation.clear()
                     for user_text, reply_text in exchanges:
                         conversation.record(user_text, reply_text)
+                    history.select_session(saved_id)
                     session_id = saved_id
                     print(f"Resumed session {saved_id}. Loaded {len(exchanges)} completed exchange(s).")
-            elif command == "/clear":
+            elif command in ("/new", "/clear"):
+                if history is not None:
+                    history.select_session(None)
                 conversation.clear()
                 session_id = None
                 print("Conversation cleared. Previously saved history is retained. Approved memories are still available.")

@@ -15,6 +15,8 @@ class ConfigurationError(ValueError):
 class Settings:
     groq_api_key: str = field(repr=False)
     groq_model: str
+    memory_model: str | None = None
+    embedding_model: str | None = None
 
 
 def load_settings(env_file: Path = Path(".env")) -> Settings:
@@ -50,4 +52,6 @@ def load_settings(env_file: Path = Path(".env")) -> Settings:
     return Settings(
         groq_api_key=required["GROQ_API_KEY"],
         groq_model=required["GROQ_MODEL"],
+        memory_model=(values.get("MELLOW_MEMORY_MODEL") or "").strip() or None,
+        embedding_model=(values.get("MELLOW_EMBEDDING_MODEL") or "").strip() or None,
     )

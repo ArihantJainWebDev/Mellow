@@ -47,7 +47,7 @@ class HistoryTests(unittest.TestCase):
                 (1, "fail", "visible text", "failed"),
                 (1, "cancel", "visible text", "interrupted"),
                 (2, "new", "visible text", "completed"),
-                (3, "restart", "visible text", "completed"),
+                (2, "restart", "visible text", "completed"),
                 (session_id, "abrupt exit", "", "pending"),
             ])
 
@@ -91,3 +91,19 @@ class HistoryTests(unittest.TestCase):
             ])
             self.assertEqual(History(path).list_sessions()[0][2], 8)
             self.assertEqual(len(History(path).list_sessions()), 1)
+
+    def test_restart_restores_reply_and_remembers_explicit_fresh_start(self):
+        with tempfile.TemporaryDirectory() as directory:
+            history = History(Path(directory) / "history.db")
+            with (
+                patch("mellow.__main__.History", return_value=history),
+                patch("mellow.__main__.load_settings", return_value=Settings("fake", "test")),
+                patch("mellow.__main__.stream_reply", side_effect=lambda *a, **kw: (chunk for chunk in ["blue"])) as provider,
+                patch("builtins.input", side_effect=["first", "/quit", "second", "/new", "/quit", "third", "/quit"]),
+                redirect_stdout(io.StringIO()),
+            ):
+                for _ in range(3):
+                    self.assertEqual(main([]), 0)
+            contexts = [call.kwargs["context"] for call in provider.call_args_list]
+            self.assertIn("blue", [item["content"] for item in contexts[1]])
+            self.assertEqual(contexts[2], contexts[0])
