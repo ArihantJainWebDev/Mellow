@@ -58,30 +58,38 @@ namespace MellowDesktop {
             this.verify=verify;
             this.preview=preview;
             parts.Children.Add(body);
-            Mesh(body,"#E8DAF4",delegate(double a,double b) {
-                double h=(1-Math.Cos(a))/2, r=Math.Sin(a)*(.58+.36*h);
-                // Gather the lower skirt into six soft folds and scallop the hem.
-                double fold=Math.Pow(h,3)*Math.Cos(6*b);
-                return new Point3D(r*(1+.20*fold)*Math.Cos(b),1.17-1.52*h-.20*fold*Math.Sin(a),
-                    .83*r*(1+.20*fold)*Math.Sin(b));
+            Mesh(body,"#E4DBEF",delegate(double a,double b) {
+                // A domed head eases into a flared skirt, then curls underneath.
+                double h=a/Pi;
+                double r=h<.5 ? .62*Math.Sin(a) : .62+.13*Math.Sin((h-.5)*Pi);
+                double underside=Math.Max(0,(h-.82)/.18);
+                r*=Math.Cos(underside*Pi/2);
+                double y=h<.5 ? .48+.65*Math.Cos(a) : .48-1.68*(h-.5);
+                y-=.066*Math.Cos(5*b)*Math.Exp(-Math.Pow((h-.82)/.12,2));
+                return new Point3D(r*Math.Cos(b),y,.79*r*Math.Sin(b));
             });
-            Mesh(body,"#E8DAF4",delegate(double a,double b) {
-                double t=a/Pi, r=.19*Math.Sin(a);
-                return new Point3D(.02+.62*t,1.01+.22*t-.12*Math.Sin(a)+r*Math.Cos(b),
-                    -.05+r*Math.Sin(b));
+            // Side-swept lock: round the root and curl the end back upward.
+            Mesh(body,"#E4DBEF",delegate(double a,double b) {
+                double t=(1-Math.Cos(a))/2;
+                double r=.156*Math.Sin(a)*(1-.64*t);
+                return new Point3D(-.17+.90*t,1.06+.07*Math.Sin(2*Pi*t)+.085*t*t+r*Math.Cos(b),
+                    -.045+r*Math.Sin(b));
             });
             body.Children.Add(eyes);
             for(int i=0;i<2;i++) {
                 int side=i*2-1;
-                Oval(eyes,"#292238",side*.225,.59,.552,.082,.117,.046);
-                Oval(eyes,"#FAF5FF",side*.225-.019,.626,.590,.018,.023,.012);
-                arms[i]=Oval(body,"#DDCBEF",side*.675,.12,.22,.148,.214,.16);
-                feet[i]=Oval(parts,"#CFBAE2",side*.245,-.43,.17,.164,.145,.205);
+                double x=side*.205;
+                Oval(eyes,"#282333",x,.57,.456,.085,.126,.052);
+                Oval(eyes,"#F6EEFF",x-.018,.614,.503,.023,.028,.012);
+                var brow=Oval(body,"#66576D",x,.747,.421,.072,.019,.021);
+                brow.Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),-side*9),x,.761,.411);
+                arms[i]=Oval(body,"#D7CBE5",side*.655,.112,.16,.108,.193,.12);
+                feet[i]=Oval(parts,"#C6B7D3",side*.255,-.336,.13,.151,.125,.204);
             }
             var scene=new Model3DGroup();
-            scene.Children.Add(new AmbientLight(Color.FromRgb(141,130,151)));
-            scene.Children.Add(new DirectionalLight(Color.FromRgb(255,247,255),new Vector3D(.4,-.8,-1)));
-            scene.Children.Add(new DirectionalLight(Color.FromRgb(173,160,210),new Vector3D(-.7,.1,.6)));
+            scene.Children.Add(new AmbientLight(Color.FromRgb(136,127,151)));
+            scene.Children.Add(new DirectionalLight(Color.FromRgb(220,208,215),new Vector3D(.55,-.85,-.72)));
+            scene.Children.Add(new DirectionalLight(Color.FromRgb(85,74,103),new Vector3D(-.8,.1,-.5)));
             scene.Children.Add(parts);
             view.Camera=new OrthographicCamera(new Point3D(0,.35,5),new Vector3D(0,0,-1),new Vector3D(0,1,0),2.1);
             view.Children.Add(new ModelVisual3D{Content=scene});
