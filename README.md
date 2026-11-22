@@ -42,3 +42,7 @@ Project code uses the [MIT license](LICENSE). Model weights, LM Studio, Groq and
 ## Desktop companion on Windows
 
 Start `python -m mellow.avatar` from this folder. Click the ghost to chat or right-click for controls. Press Ctrl+Alt+M to chat, or open Mellow from the Windows notification area. Right-click its tray icon for move, size, hide, quiet, startup and exit controls. See the [Goal 2 walkthrough and single acceptance pass](docs/GOAL_2_DESKTOP.md).
+
+### Hat trick character study
+
+Run `python -m mellow.avatar --hat-trick` for the separate real-time WPF character study. Space pauses, R replays, arrow keys rotate, Tab changes between close-up and small-window scale, and Esc exits. The pearl sheet and brim deform procedurally. The hat and folded umbrella are original local meshes. [Four runtime poses](docs/visuals/hat-trick-runtime.png).

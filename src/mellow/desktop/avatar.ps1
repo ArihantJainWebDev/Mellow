@@ -1,4 +1,4 @@
-﻿param([switch]$Verify, [string]$Preview)
+﻿param([switch]$HatTrick, [switch]$Verify, [string]$Preview)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore,PresentationFramework,WindowsBase,System.Xaml,System.Windows.Forms,System.Drawing,UIAutomationClient,UIAutomationTypes
 $references = @(
@@ -12,6 +12,11 @@ $references = @(
     [System.Windows.Automation.ControlType].Assembly.Location
     [System.Xaml.XamlReader].Assembly.Location
 )
+if ($HatTrick) {
+    Add-Type -Path (Join-Path $PSScriptRoot HatTheatre.cs) -ReferencedAssemblies $references
+    [MellowDesktop.HatTheatre]::Run($Preview)
+    return
+}
 Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot Character.cs)) -ReferencedAssemblies $references
 $closeSignal = $null
 if ($env:MELLOW_CLOSE_EVENT) {

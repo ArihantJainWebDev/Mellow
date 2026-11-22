@@ -1,4 +1,4 @@
-﻿"""Launch the Windows desktop ghost. Close the terminal or press Ctrl+C to exit."""
+"""Launch the Windows desktop ghost. Close the terminal or press Ctrl+C to exit."""
 from pathlib import Path
 import ctypes
 import os
@@ -15,6 +15,7 @@ def main() -> int:
     if arguments[:1] == ['--home'] and len(arguments) >= 2:
         os.chdir(arguments[1])
         arguments = arguments[2:]
+    arguments = ['-HatTrick' if arg == '--hat-trick' else arg for arg in arguments]
     script = Path(__file__).with_name("desktop") / "avatar.ps1"
     event_name = "Local\\MellowClose-" + uuid.uuid4().hex
     kernel = ctypes.WinDLL("kernel32", use_last_error=True)
