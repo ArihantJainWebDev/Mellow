@@ -75,6 +75,7 @@ namespace MellowDesktop {
                 return new Point3D(-.17+.90*t,1.06+.07*Math.Sin(2*Pi*t)+.085*t*t+r*Math.Cos(b),
                     -.045+r*Math.Sin(b));
             });
+            lip=Oval(body,"#64485F",0,.404,.518,.075,.045,.025);
             body.Children.Add(eyes);
             for(int i=0;i<2;i++) {
                 int side=i*2-1;
@@ -83,7 +84,7 @@ namespace MellowDesktop {
                 Oval(eyes,"#F6EEFF",x-.018,.614,.503,.023,.028,.012);
                 var brow=Oval(body,"#66576D",x,.747,.421,.072,.019,.021);
                 brow.Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),-side*9),x,.761,.411);
-                arms[i]=Oval(body,"#D7CBE5",side*.655,.112,.16,.108,.193,.12);
+                arms[i]=Oval(body,"#D7CBE5",side*.718,.112,.29,.128,.208,.14);
                 feet[i]=Oval(parts,"#C6B7D3",side*.255,-.336,.13,.151,.125,.204);
             }
             var scene=new Model3DGroup();
@@ -109,46 +110,48 @@ namespace MellowDesktop {
             timer.Tick+=delegate {Frame();};
         }
         readonly Random random=new Random();
-        double legStart, pause=8, duration=4, from, to=95;
-        void Pose(double t) {
-            // Each 16-second cycle contains a long rest, a short walk and another rest.
-            double now=t;
+        void Pose(double now) {
+            double dt=Clamp(now-lastTick,0,.08);
+            lastTick=now;
             if(state!="idle" && time.Elapsed.TotalSeconds>=until) Signal("idle","",0);
-            if(!moving && !view.IsMouseOver && state=="idle") walkTime+=Math.Max(0,t-lastTick);
-            lastTick=t;t=walkTime;
-            // Pick a new destination and pause on each leg; hold position on hover.
-            if(t>=legStart+pause+duration) {
-                from=to; to=random.NextDouble()*Math.Min(170,SystemParameters.WorkArea.Width*.18);
-                legStart=t; pause=3+random.NextDouble()*9; duration=2+Math.Abs(to-from)/46;
-            }
-            double phase=t-legStart, u=Math.Max(0,Math.Min(1,(phase-pause)/duration));
-            double ease=u*u*(3-2*u), direction=to>=from?-1:1;
-            double stride=Math.Sin(4*Pi*u), weight=Math.Sin(Pi*u);
-            var area=SystemParameters.WorkArea;
-            if(!moving) {
-                window.Left=Math.Min(area.Right-window.Width,Math.Max(area.Left,area.Right-window.Width-offset-(from+(to-from)*ease)));
-                window.Top=Math.Min(area.Bottom-window.Height+4,Math.Max(area.Top,area.Bottom-window.Height+4-lift));
-            }
-            if(state!="idle") {stride=0;weight=0;}
-            double attention=state=="listen"?-12:state=="think"?9:state=="rest"?6:0;
-            TurnHead(attention,now);
+            NoticeActivity(now);
+            bool attending=state=="idle" && now<attentiveUntil;
+            if(!moving && (guiding || (!view.IsMouseOver && state=="idle" && !attending)))walkTime+=dt;
+            double stride,weight,direction;
+            Navigate(walkTime,out stride,out weight,out direction);
+            if(!guiding && (state!="idle" || attending)) {stride=0;weight=0;}
+            double blend=1-Math.Exp(-dt*6);
+            double targetLean=state=="listen"||attending?-13:state=="think"?10:state=="rest"?7:climb?weight*9:0;
+            lean+=(targetLean-lean)*blend;
+            TurnHead(lean,now);
+            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*42*weight-9;
+            yaw+=(targetYaw-yaw)*blend;
+            mouthOpen+=((state=="speak"?.72+.27*Math.Sin(now*13):attending?.52:.38)-mouthOpen)*blend;
+            lip.Transform=new ScaleTransform3D(1,mouthOpen,1,0,.404,.518);
             var turn=new Transform3DGroup();
-            turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),state=="privacy"?174:direction*56*weight-9)));
-            turn.Children.Add(new TranslateTransform3D(0,.013*Math.Sin(t*2)+.044*Math.Abs(stride),0));
+            turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),yaw)));
+            turn.Children.Add(new TranslateTransform3D(0,.013*Math.Sin(now*2)+.044*Math.Abs(stride),0));
             parts.Transform=turn;
             for(int i=0;i<2;i++) {
                 double step=stride*(2*i-1);
                 feet[i].Transform=new TranslateTransform3D(direction*.11*step,.077*Math.Max(0,step),.04*step);
                 var arm=new Transform3DGroup();
-                double gesture=state=="offer"?-110:state=="point"?-78:state=="think"?-35:state=="speak"?-20-10*Math.Sin(now*5):0;
-                if(i==1) arm.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,-1),-gesture),.64,.24,.16));
-                arm.Children.Add(new TranslateTransform3D(0,(i==1 && gesture!=0?.16:0)+.012*Math.Sin(now*2),-.085*step));
+                bool active=(state=="point" && pointingLeft)?i==0:i==1;
+                double goal=active?(state=="offer"?119:state=="point"?83:state=="think"?48:
+                    state=="speak"?31+12*Math.Sin(now*4):0):0;
+                if(climb && weight>.02)goal+=(48+37*step)*weight;
+                double angle=i==0?armLeft:armRight;
+                angle+=(goal-angle)*blend;
+                if(i==0)armLeft=angle;else armRight=angle;
+                double side=i*2-1;
+                arm.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),side*angle),side*.718,.28,.29));
+                arm.Children.Add(new TranslateTransform3D(side*.09*angle/120,.012*Math.Sin(now*2),.06*Math.Abs(step)));
                 arms[i].Transform=arm;
             }
             double blink=Math.Max(.09,Math.Min(1,Math.Abs(now%4.7-3.9)*8));
             var gaze=new Transform3DGroup();
             gaze.Children.Add(new ScaleTransform3D(1,state=="rest"?.15:blink,1,0,.59,0));
-            gaze.Children.Add(new TranslateTransform3D(direction*.022*Math.Max(0,1-Math.Abs(phase-pause)),0,0));
+            gaze.Children.Add(new TranslateTransform3D(direction*.022*weight,0,0));
             eyes.Transform=gaze;
         }
         void CaptureMotion(string path) {
@@ -169,8 +172,8 @@ namespace MellowDesktop {
                     for(int side=0;side<2;side++){
                         double x=side*260;
                         dc.DrawRectangle(side==0?Brushes.WhiteSmoke:Brushes.MidnightBlue,null,new Rect(x,0,260,height+8));
-                        double drift=window.Left-SystemParameters.WorkArea.Right+width+30;
-                        dc.DrawRectangle(new VisualBrush(content),null,new Rect(x+58+drift*.4,2,width,height));
+                        
+                        dc.DrawRectangle(new VisualBrush(content),null,new Rect(x+35,2,width,height));
                     }
                 }
                 var bmp=new System.Windows.Media.Imaging.RenderTargetBitmap(520,(int)height+8,96,96,PixelFormats.Pbgra32);
@@ -195,7 +198,9 @@ namespace MellowDesktop {
                 CaptureMotion(preview);
             } else if(verify && frames==12 && !String.IsNullOrEmpty(preview)) {
                 var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(116,116,96,96,PixelFormats.Pbgra32);
-                bitmap.Render(view);
+                var drawing=new DrawingVisual();
+                using(var dc=drawing.RenderOpen()) dc.DrawRectangle(new VisualBrush(view),null,new Rect(0,0,116,116));
+                bitmap.Render(drawing);
                 var png=new System.Windows.Media.Imaging.PngBitmapEncoder();
                 png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
                 using(var stream=System.IO.File.Create(preview)) png.Save(stream);
@@ -211,7 +216,21 @@ namespace MellowDesktop {
                     verifyStage=3; chatWindow.Hide(); Signal("offer","Preview: time for a break?",4);
                 }
                 if(verifyStage==3 || time.Elapsed.TotalSeconds>65) window.Close();
-            } else if(verify && time.Elapsed.TotalSeconds>2.6) window.Close();
+            } else if(verify && time.Elapsed.TotalSeconds>2.6) {
+                if(verifyChat!="1" && !moving){
+                    // Exercise an actual vertical route through the same interpolator as the timer.
+                    var bounds=Bounds();
+                    Travel(new Point(window.Left,bounds.Top),0,true);
+                    holdUntil=travel+1;
+                    double step,weight,direction;
+                    Navigate(travel/2,out step,out weight,out direction);
+                    double mid=window.Top;
+                    Navigate(travel,out step,out weight,out direction);
+                    if(mid<=bounds.Top || Math.Abs(window.Top-bounds.Top)>1)
+                        throw new InvalidOperationException("Climb did not reach the upper edge.");
+                }
+                window.Close();
+            }
         }
         public static void Run(bool verify,string preview,System.Threading.EventWaitHandle closeSignal) {
             var ghost=new Ghost(verify,preview);

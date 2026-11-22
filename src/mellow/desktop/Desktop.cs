@@ -99,7 +99,7 @@ namespace MellowDesktop {
                 dragConsumed=true;
                 window.DragMove();
                 var r=SystemParameters.WorkArea;
-                from=0;to=95;legStart=walkTime; offset=r.Right-window.Width-window.Left; lift=r.Bottom-window.Height+4-window.Top;
+                placed=false;guiding=false;pathStage=0;travel=0; offset=r.Right-window.Width-window.Left; lift=r.Bottom-window.Height+4-window.Top;
                 moving=false; SetPassive(passThrough); SavePosition();
             };
             if(verify && verifyChat!="1") return;
@@ -109,6 +109,16 @@ namespace MellowDesktop {
             var pass=new Forms.ToolStripMenuItem("Click through ghost (restore from tray)"){CheckOnClick=true};
             pass.CheckedChanged+=delegate {passThrough=pass.Checked;SetPassive(passThrough);};
             menu.Items.Add(pass);
+            menu.Items.Add("Point at a button or link (hover, Ctrl+Alt+P)",null,delegate {
+                Signal("think","Hover over a button or link…",2);
+                var delay=new DispatcherTimer{Interval=TimeSpan.FromSeconds(2)};
+                delay.Tick+=delegate {delay.Stop();if(!quitting)PointAtControl();};delay.Start();
+            });
+            menu.Items.Add("Climb to the top edge",null,delegate {
+                var b=Bounds();guiding=false;pathStage=1;
+                Travel(new Point(window.Left<b.Left+b.Width/2?b.Left:b.Right,window.Top),walkTime,false);
+                holdUntil=walkTime+travel+.2;Signal("idle","",0);
+            });
             window.Loaded+=delegate {if(!verify) Signal("offer","Click to chat. Right-click for controls.",7);};
             foreach(int n in new int[]{82,116,156}) {
                 int pixels=n;
@@ -146,10 +156,12 @@ namespace MellowDesktop {
                 var h=new WindowInteropHelper(window).Handle;
                 HwndSource.FromHwnd(h).AddHook(Hook);
                 hotkeyRegistered=RegisterHotKey(h,Hotkey,0x4003,0x4D);
+                guideKey=RegisterHotKey(h,Hotkey+1,0x4003,0x50);
                 if(!hotkeyRegistered) tray.Text="Mellow (shortcut busy; double-click to chat)";
             };
             window.Closed+=delegate {
                 quitting=true;
+                if(guideKey) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey+1);
                 if(hotkeyRegistered) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey);
                 if(backend!=null) {
                     if(!backend.HasExited) {try {backend.StandardInput.Close();} catch(IOException) {} if(!backend.WaitForExit(2000)) backend.Kill();}
@@ -160,6 +172,7 @@ namespace MellowDesktop {
             };
         }
         IntPtr Hook(IntPtr h,int msg,IntPtr w,IntPtr l,ref bool handled) {
+            if(msg==0x0312 && w.ToInt32()==Hotkey+1){PointAtControl();handled=true;}
             if(msg==0x0312 && w.ToInt32()==Hotkey) {OpenChat();handled=true;}
             return IntPtr.Zero;
         }

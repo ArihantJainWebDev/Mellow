@@ -22,3 +22,7 @@ Review the [actual motion capture](visuals/goal2-motion.gif) alongside the [appr
 ## Recorded checks
 
 A clean install built the 0.2.0rc1 wheel and passed 49 tests. A Windows smoke run reported 56 frames, passive window styles and preserved foreground focus. A separate real Groq reply streamed through the desktop chat into a temporary SQLite session and reopened through the CLI history layer. The visual comparison capture contains 60 frames. Physical dragging, keyboard shortcut availability, startup at actual sign-in, and personal visual acceptance remain manual checks.
+
+## Screen movement and attention
+
+The ghost can walk to a side, climb to the upper edge and float across the primary work area. Right-click and select **Climb to the top edge** for an immediate route. Its head, shoulder angles and mouth blend toward each pose over several frames. Activity outside chat uses a Windows last-input timestamp and a stationary pointer as an approximate typing cue. It reads no characters. To point, hover over an accessible button or hyperlink and press Ctrl+Alt+P, or use the delayed menu action. Only the target type and bounds are used locally. Unexposed controls cannot be identified this way.
