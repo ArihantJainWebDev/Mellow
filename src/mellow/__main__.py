@@ -1,4 +1,4 @@
-"""CLI entry point: check configuration or chat with Groq."""
+﻿"""CLI entry point: check configuration or chat with Groq."""
 
 import argparse
 from contextlib import closing
@@ -16,7 +16,7 @@ from mellow.summary import session_summary
 from mellow.memory_worker import start_worker
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, read_message=None, event=None) -> int:
     parser = argparse.ArgumentParser(description="Mellow: chat with Groq.")
     parser.add_argument(
         "--env-file", type=Path, default=Path(".env"),
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if arguments.once:
-        return _one_message(settings)
+        return _one_message(settings, read_message)
 
     try:
         history = None if arguments.private else History(Path("data/history.db"))
@@ -53,10 +53,10 @@ def main(argv: list[str] | None = None) -> int:
         embedding_model = arguments.embedding_model or settings.embedding_model
         semantic = SemanticRecall(embedding_model) if history is not None and embedding_model else None
         if history is None or not memory_model:
-            return _chat(settings, history, semantic=semantic)
+            return _chat(settings, history, semantic=semantic, read_message=read_message, event=event)
         stop, worker = start_worker(history, memory_model)
         try:
-            return _chat(settings, history, extract_memory=True, semantic=semantic)
+            return _chat(settings, history, extract_memory=True, semantic=semantic, read_message=read_message, event=event)
         finally:
             stop.set()
             worker.join(timeout=1)
@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _chat(settings: Settings, history: History | None, *, extract_memory: bool = False,
-          semantic: SemanticRecall | None = None) -> int:
+          semantic: SemanticRecall | None = None, read_message=None, event=None) -> int:
     conversation = Conversation()
     session_id = None
     print("Messages and recent exchanges are sent to Groq.")
@@ -86,7 +86,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
     print("Type /help for commands or /quit to leave.")
     while True:
         try:
-            message = input("You: ").strip()
+            message = (read_message or input)("You: ").strip()
         except EOFError:
             print()
             return 0
@@ -236,6 +236,8 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             else:
                 print("Unknown command. Type /help for available commands.", file=sys.stderr)
             continue
+        if event:
+            event("think", "Preparing a reply…")
         if history is not None:
             # Rebuild from committed, visible turns so another CLI's deletion
             # or forget operation also applies to this open conversation.
@@ -255,7 +257,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             memory = semantic.find(message, approved) if semantic else memory_message(message, approved)
             if memory is not None:
                 context = (context[0], memory, *context[1:])
-        status, answer = _render(settings, message, context=context)
+        status, answer = _render(settings, message, context=context, event=event)
+        if event:
+            event("done", "ok" if status == 0 else "failed")
         if history is not None:
             outcome = {0: "completed", 1: "failed", 130: "interrupted"}[status]
             queued = history.finish_turn(turn_id, outcome, answer, enqueue=extract_memory, automatic=extract_memory)
@@ -321,7 +325,7 @@ def _review_command(history: History, command: str, fields: list[str]) -> None:
         print("No pending candidate with that ID.", file=sys.stderr)
 
 
-def _render(settings: Settings, message: str, **options) -> tuple[int, str]:
+def _render(settings: Settings, message: str, *, event=None, **options) -> tuple[int, str]:
     parts = []
     try:
         print("Mellow: ", end="", flush=True)
@@ -329,6 +333,8 @@ def _render(settings: Settings, message: str, **options) -> tuple[int, str]:
             for text in chunks:
                 print(text, end="", flush=True)
                 parts.append(text)
+                if event:
+                    event("chunk", text)
         print()
         return 0, "".join(parts)
     except KeyboardInterrupt:
@@ -340,10 +346,10 @@ def _render(settings: Settings, message: str, **options) -> tuple[int, str]:
         return 1, "".join(parts)
 
 
-def _one_message(settings: Settings) -> int:
+def _one_message(settings: Settings, read_message=None) -> int:
     print("One message will be sent to Groq; no conversation is saved.")
     try:
-        message = input("You: ").strip()
+        message = (read_message or input)("You: ").strip()
     except (KeyboardInterrupt, EOFError):
         print("\n[Cancelled.]")
         return 130

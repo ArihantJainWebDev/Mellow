@@ -212,3 +212,7 @@ Goal 1 release checks, limitations, and walkthrough are in [the release record](
 ## Goal 2 first desktop prototype
 
 Owner verified Goal 1 continuity, fresh-chat recall, correction and forgetting using the CLI. On the Goal 2 branch the native WPF prototype renders a hierarchical 3D ghost with procedural body, limbs and blink poses. The Windows smoke run rendered 52 animation ticks, retained the original foreground window, and verified passive window flags. All 48 existing CLI tests passed. Size, silhouette and movement await owner review beside the approved artwork. The proposed live memory observatory remains in the Goal 4 dashboard backlog.
+
+## Goal 2 desktop acceptance build
+
+Owner accepted the revised idle silhouette. Tray controls, poses, transient captions and shared desktop chat are implemented on the Goal 2 branch. See [test steps and scope](GOAL_2_DESKTOP.md). Owner acceptance of the full milestone is pending.

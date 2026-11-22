@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -9,7 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 
 namespace MellowDesktop {
-    public sealed class Ghost {
+    public sealed partial class Ghost {
         const double Pi = Math.PI;
         readonly Model3DGroup parts = new Model3DGroup();
         readonly Model3DGroup body = new Model3DGroup();
@@ -97,6 +97,7 @@ namespace MellowDesktop {
                 AllowsTransparency=true,Background=Brushes.Transparent,ShowInTaskbar=false,
                 ShowActivated=false,Topmost=true,ResizeMode=ResizeMode.NoResize,Content=view,
                 Focusable=false,WindowStartupLocation=WindowStartupLocation.Manual};
+            InitDesktop();
             window.SourceInitialized+=delegate {
                 IntPtr h=new WindowInteropHelper(window).Handle;
                 const int flags=0x08000000|0x20|0x80; // NOACTIVATE, TRANSPARENT, TOOLWINDOW
@@ -109,41 +110,107 @@ namespace MellowDesktop {
         }
         void Pose(double t) {
             // Each 16-second cycle contains a long rest, a short walk and another rest.
+            double now=t;
+            if(state!="idle" && time.Elapsed.TotalSeconds>=until) Signal("idle","",0);
+            if(!moving && state=="idle") walkTime+=Math.Max(0,t-lastTick);
+            lastTick=t;t=walkTime;
             double cycle=Math.Floor(t/16), phase=t%16;
             double u=Math.Max(0,Math.Min(1,(phase-8)/4));
             double ease=u*u*(3-2*u), direction=cycle%2==0?-1:1;
             double stride=Math.Sin(4*Pi*u), weight=Math.Sin(Pi*u);
             var area=SystemParameters.WorkArea;
             double distance=Math.Min(132,area.Width*.18);
-            window.Left=Math.Max(area.Left,area.Right-window.Width-30-distance*(direction<0?ease:1-ease));
-            window.Top=area.Bottom-window.Height+4;
+            if(!moving) {
+                window.Left=Math.Min(area.Right-window.Width,Math.Max(area.Left,area.Right-window.Width-offset-distance*(direction<0?ease:1-ease)));
+                window.Top=Math.Min(area.Bottom-window.Height+4,Math.Max(area.Top,area.Bottom-window.Height+4-lift));
+            }
+            if(state!="idle") {stride=0;weight=0;}
+            double attention=state=="listen"?-12:state=="think"?9:state=="rest"?6:0;
+            TurnHead(attention,now);
             var turn=new Transform3DGroup();
-            turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),direction*56*weight-9)));
+            turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),state=="privacy"?174:direction*56*weight-9)));
             turn.Children.Add(new TranslateTransform3D(0,.013*Math.Sin(t*2)+.044*Math.Abs(stride),0));
             parts.Transform=turn;
             for(int i=0;i<2;i++) {
                 double step=stride*(2*i-1);
                 feet[i].Transform=new TranslateTransform3D(direction*.11*step,.077*Math.Max(0,step),.04*step);
-                arms[i].Transform=new TranslateTransform3D(0,.012*Math.Sin(t*2),-.085*step);
+                var arm=new Transform3DGroup();
+                double gesture=state=="offer"?-110:state=="point"?-78:state=="think"?-35:state=="speak"?-20-10*Math.Sin(now*5):0;
+                if(i==1) arm.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,-1),-gesture),.64,.24,.16));
+                arm.Children.Add(new TranslateTransform3D(0,(i==1 && gesture!=0?.16:0)+.012*Math.Sin(now*2),-.085*step));
+                arms[i].Transform=arm;
             }
-            double blink=Math.Max(.09,Math.Min(1,Math.Abs(t%4.7-3.9)*8));
-            eyes.Transform=new ScaleTransform3D(1,blink,1,0,.59,0);
+            double blink=Math.Max(.09,Math.Min(1,Math.Abs(now%4.7-3.9)*8));
+            var gaze=new Transform3DGroup();
+            gaze.Children.Add(new ScaleTransform3D(1,state=="rest"?.15:blink,1,0,.59,0));
+            gaze.Children.Add(new TranslateTransform3D(direction*.022*Math.Max(0,1-Math.Abs(phase-8)),0,0));
+            eyes.Transform=gaze;
         }
+        void CaptureMotion(string path) {
+            var gif=new System.Windows.Media.Imaging.GifBitmapEncoder();
+            for(int frame=0;frame<60;frame++){
+                double seconds=frame*.17;
+                if(frame==0) Signal("idle","",0);
+                if(frame==25) Signal("think","Preparing a reply…",60);
+                if(frame==38) Signal("offer","A quick reminder?",60);
+                if(frame==50) Signal("rest","",60);
+                Pose(seconds+6);
+                double width=window.Width,height=window.Height;
+                var content=(FrameworkElement)window.Content;
+                content.Measure(new Size(width,height));content.Arrange(new Rect(0,0,width,height));
+                content.UpdateLayout();
+                var drawing=new DrawingVisual();
+                using(var dc=drawing.RenderOpen()){
+                    for(int side=0;side<2;side++){
+                        double x=side*260;
+                        dc.DrawRectangle(side==0?Brushes.WhiteSmoke:Brushes.MidnightBlue,null,new Rect(x,0,260,height+8));
+                        double drift=window.Left-SystemParameters.WorkArea.Right+width+30;
+                        dc.DrawRectangle(new VisualBrush(content),null,new Rect(x+58+drift*.4,2,width,height));
+                    }
+                }
+                var bmp=new System.Windows.Media.Imaging.RenderTargetBitmap(520,(int)height+8,96,96,PixelFormats.Pbgra32);
+                bmp.Render(drawing);
+                var meta=new System.Windows.Media.Imaging.BitmapMetadata("gif");
+                meta.SetQuery("/grctlext/Delay",(ushort)17);
+                gif.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp,null,meta,null));
+            }
+            using(var output=System.IO.File.Create(path)) gif.Save(output);
+        }
+        void TurnHead(double degrees,double now) {
+            body.Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),
+                degrees+(state=="speak"?2*Math.Sin(now*5):0)),0,.12,0);
+        }
+        System.Threading.EventWaitHandle closeSignal;
         void Frame() {
+            if(closeSignal!=null && closeSignal.WaitOne(0)){window.Close();return;}
             frames++;
             Pose(time.Elapsed.TotalSeconds*(verify?6:1));
             if(verify) keptFocus &= foreground==GetForegroundWindow();
-            if(verify && frames==12 && !String.IsNullOrEmpty(preview)) {
+            if(verify && frames==12 && !String.IsNullOrEmpty(preview) && preview.EndsWith(".gif",StringComparison.OrdinalIgnoreCase)) {
+                CaptureMotion(preview);
+            } else if(verify && frames==12 && !String.IsNullOrEmpty(preview)) {
                 var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(116,116,96,96,PixelFormats.Pbgra32);
                 bitmap.Render(view);
                 var png=new System.Windows.Media.Imaging.PngBitmapEncoder();
                 png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
                 using(var stream=System.IO.File.Create(preview)) png.Save(stream);
             }
-            if(verify && time.Elapsed.TotalSeconds>2.6) window.Close();
+            if(verify && verifyChat!="1" && frames==16) Signal("offer","Preview: time for a break?",1);
+            if(verify && verifyChat=="1") {
+                if(verifyStage==0 && frames>=4) {OpenChat();verifyStage=1;}
+                if(verifyStage==1 && ready) {
+                    verifyStage=2;input.Text="Respond with just MELLOWOK.";SendInput();
+                }
+                if(verifyStage==2 && ready) {
+                    if(!transcript.Text.Contains("MELLOWOK") || state!="speak") throw new InvalidOperationException("Chat acceptance failed.");
+                    verifyStage=3; chatWindow.Hide(); Signal("offer","Preview: time for a break?",4);
+                }
+                if(verifyStage==3 || time.Elapsed.TotalSeconds>65) window.Close();
+            } else if(verify && time.Elapsed.TotalSeconds>2.6) window.Close();
         }
-        public static void Run(bool verify,string preview) {
+        public static void Run(bool verify,string preview,System.Threading.EventWaitHandle closeSignal) {
             var ghost=new Ghost(verify,preview);
+            ghost.closeSignal=closeSignal;
             ghost.foreground=GetForegroundWindow();
             ghost.Pose(0);
             ghost.window.Show();
@@ -153,7 +220,7 @@ namespace MellowDesktop {
             Dispatcher.Run();
             if(verify) {
                 Console.WriteLine("Frames={0} passiveWindow={1} focusPreserved={2}",ghost.frames,ghost.clickThrough,ghost.keptFocus);
-                if(!ghost.clickThrough || !ghost.keptFocus || ghost.frames<12) throw new InvalidOperationException("Avatar smoke check failed.");
+                if(!ghost.clickThrough || (ghost.verifyChat=="1" ? ghost.verifyStage!=3 : !ghost.keptFocus || ghost.frames<12)) throw new InvalidOperationException("Avatar smoke check failed.");
             }
         }
     }
