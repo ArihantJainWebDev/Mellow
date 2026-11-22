@@ -15,8 +15,8 @@ namespace MellowDesktop {
         readonly Model3DGroup body = new Model3DGroup();
         readonly Model3DGroup eyes = new Model3DGroup();
         readonly Viewport3D view = new Viewport3D();
-        readonly GeometryModel3D[] feet = new GeometryModel3D[2];
-        readonly GeometryModel3D[] arms = new GeometryModel3D[2];
+        readonly Model3DGroup[] feet = new Model3DGroup[2];
+        readonly Model3DGroup[] arms = new Model3DGroup[2];
         readonly Window window;
         readonly Stopwatch time = new Stopwatch();
         readonly DispatcherTimer timer = new DispatcherTimer();
@@ -58,39 +58,11 @@ namespace MellowDesktop {
             this.verify=verify;
             this.preview=preview;
             parts.Children.Add(body);
-            Mesh(body,"#E4DBEF",delegate(double a,double b) {
-                // A domed head eases into a flared skirt, then curls underneath.
-                double h=a/Pi;
-                double r=h<.5 ? .62*Math.Sin(a) : .62+.13*Math.Sin((h-.5)*Pi);
-                double underside=Math.Max(0,(h-.82)/.18);
-                r*=Math.Cos(underside*Pi/2);
-                double y=h<.5 ? .48+.65*Math.Cos(a) : .48-1.68*(h-.5);
-                y-=.066*Math.Cos(5*b)*Math.Exp(-Math.Pow((h-.82)/.12,2));
-                return new Point3D(r*Math.Cos(b),y,.79*r*Math.Sin(b));
-            });
-            // Side-swept lock: round the root and curl the end back upward.
-            Mesh(body,"#E4DBEF",delegate(double a,double b) {
-                double t=(1-Math.Cos(a))/2;
-                double r=.156*Math.Sin(a)*(1-.64*t);
-                return new Point3D(-.17+.90*t,1.06+.07*Math.Sin(2*Pi*t)+.085*t*t+r*Math.Cos(b),
-                    -.045+r*Math.Sin(b));
-            });
-            lip=Oval(body,"#64485F",0,.404,.518,.075,.045,.025);
-            body.Children.Add(eyes);
-            for(int i=0;i<2;i++) {
-                int side=i*2-1;
-                double x=side*.205;
-                Oval(eyes,"#282333",x,.57,.456,.085,.126,.052);
-                Oval(eyes,"#F6EEFF",x-.018,.614,.503,.023,.028,.012);
-                var brow=Oval(body,"#66576D",x,.747,.421,.072,.019,.021);
-                brow.Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),-side*9),x,.761,.411);
-                arms[i]=Oval(body,"#D7CBE5",side*.718,.112,.29,.128,.208,.14);
-                feet[i]=Oval(parts,"#C6B7D3",side*.255,-.336,.13,.151,.125,.204);
-            }
+            Sculpt();
             var scene=new Model3DGroup();
-            scene.Children.Add(new AmbientLight(Color.FromRgb(136,127,151)));
-            scene.Children.Add(new DirectionalLight(Color.FromRgb(220,208,215),new Vector3D(.55,-.85,-.72)));
-            scene.Children.Add(new DirectionalLight(Color.FromRgb(85,74,103),new Vector3D(-.8,.1,-.5)));
+            scene.Children.Add(new AmbientLight(Color.FromRgb(103,92,118)));
+            scene.Children.Add(new DirectionalLight(Color.FromRgb(187,184,196),new Vector3D(.55,-.85,-.72)));
+            scene.Children.Add(new DirectionalLight(Color.FromRgb(66,59,79),new Vector3D(-.8,.1,-.5)));
             scene.Children.Add(parts);
             view.Camera=new OrthographicCamera(new Point3D(0,.35,5),new Vector3D(0,0,-1),new Vector3D(0,1,0),2.1);
             view.Children.Add(new ModelVisual3D{Content=scene});
@@ -144,10 +116,11 @@ namespace MellowDesktop {
                 angle+=(goal-angle)*blend;
                 if(i==0)armLeft=angle;else armRight=angle;
                 double side=i*2-1;
-                arm.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),side*angle),side*.718,.28,.29));
-                arm.Children.Add(new TranslateTransform3D(side*.09*angle/120,.012*Math.Sin(now*2),.06*Math.Abs(step)));
+                arm.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),side*angle),side*.608,.23,.18));
+                arm.Children.Add(new TranslateTransform3D(side*.009*angle/120,.012*Math.Sin(now*2),.06*Math.Abs(step)));
                 arms[i].Transform=arm;
             }
+            Flex(dt,stride);
             double blink=Math.Max(.09,Math.Min(1,Math.Abs(now%4.7-3.9)*8));
             var gaze=new Transform3DGroup();
             gaze.Children.Add(new ScaleTransform3D(1,state=="rest"?.15:blink,1,0,.59,0));
@@ -194,7 +167,8 @@ namespace MellowDesktop {
             frames++;
             Pose(time.Elapsed.TotalSeconds*(verify?6:1));
             if(verify) keptFocus &= foreground==GetForegroundWindow();
-            if(verify && frames==12 && !String.IsNullOrEmpty(preview) && preview.EndsWith(".gif",StringComparison.OrdinalIgnoreCase)) {
+            if(verify && frames==12 && preview!=null && preview.EndsWith("-sheet.png")) RenderCharacterSheet(preview);
+            else if(verify && frames==12 && !String.IsNullOrEmpty(preview) && preview.EndsWith(".gif",StringComparison.OrdinalIgnoreCase)) {
                 CaptureMotion(preview);
             } else if(verify && frames==12 && !String.IsNullOrEmpty(preview)) {
                 var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(116,116,96,96,PixelFormats.Pbgra32);

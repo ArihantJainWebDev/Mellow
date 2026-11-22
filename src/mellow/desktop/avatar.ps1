@@ -12,7 +12,7 @@ $references = @(
     [System.Windows.Automation.ControlType].Assembly.Location
     [System.Xaml.XamlReader].Assembly.Location
 )
-Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs)) -ReferencedAssemblies $references
+Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot Character.cs)) -ReferencedAssemblies $references
 $closeSignal = $null
 if ($env:MELLOW_CLOSE_EVENT) {
     $closeSignal = [Threading.EventWaitHandle]::OpenExisting($env:MELLOW_CLOSE_EVENT)
