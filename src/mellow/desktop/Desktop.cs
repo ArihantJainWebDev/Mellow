@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using Ellipse = System.Windows.Shapes.Ellipse;
@@ -99,8 +99,8 @@ namespace MellowDesktop {
                 if(!moving) return;
                 dragConsumed=true;
                 window.DragMove();
-                var r=SystemParameters.WorkArea;
-                placed=false;guiding=false;pathStage=0;travel=0; offset=r.Right-window.Width-window.Left; lift=r.Bottom-window.Height+4-window.Top;
+                var bounds=Bounds();
+                placed=false;guiding=false;pathStage=0;travel=0; offset=bounds.Right-window.Left; lift=Math.Max(0,bounds.Bottom-window.Top);
                 moving=false; SetPassive(passThrough); SavePosition();
             };
             if(verify && verifyChat!="1") return;
@@ -135,7 +135,11 @@ namespace MellowDesktop {
             window.Loaded+=delegate {if(!verify) Signal("offer","Click to chat. Right-click for controls.",7);};
             foreach(int n in new int[]{82,116,156}) {
                 int pixels=n;
-                menu.Items.Add("Size "+pixels,null,delegate {size=pixels;LayoutAvatar();SavePosition();});
+                menu.Items.Add("Size "+pixels,null,delegate {var oldFloor=Bounds().Bottom;
+                    bool standing=Math.Abs(window.Top-oldFloor)<1 && !guiding && perch==IntPtr.Zero;
+                    size=pixels;LayoutAvatar();
+                    if(standing){double delta=Bounds().Bottom-oldFloor;origin.Y+=delta;destination.Y+=delta;window.Top+=delta;}
+                    SavePosition();});
             }
             var mute=new Forms.ToolStripMenuItem("Quiet (hide bubbles)"){CheckOnClick=true};
             mute.CheckedChanged+=delegate {quiet=mute.Checked; if(quiet) Signal("idle","",0);};

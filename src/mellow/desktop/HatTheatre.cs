@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -120,6 +120,7 @@ namespace MellowDesktop {
         });
         Surface(umbrella,ColorMat("#C29960"),3,32,(u,a)=>new Point3D(.11*Math.Cos(a),.35+.032*u,.11*Math.Sin(a)));
     }
+    internal Model3DGroup[] Feet {get {return feet;}}
     internal Model3DGroup Model {get {return actor;}}
     internal void Animate(double t,double? desktopStep=null,double left=0,double right=0,double blink=1,double glide=0,double cover=0){
         // Return through the pickup poses at the end so the loop joins cleanly.

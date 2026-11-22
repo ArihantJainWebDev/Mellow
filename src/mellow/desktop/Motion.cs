@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -14,12 +14,12 @@ namespace MellowDesktop {
         [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref InputStamp stamp);
         uint previousInput;
         System.Drawing.Point previousCursor;
-        double attentiveUntil;
+        double attentiveUntil, attentionStarted;
         Point origin, destination;
         bool placed, climb, guiding, pointingLeft, guideKey;
         int pathStage;
         double departure, travel, holdUntil;
-        double lean, yaw=-9, armLeft, armRight, mouthOpen=.35;
+        double lean, yaw, armLeft, armRight, mouthOpen=.35;
         GeometryModel3D lip;
         static double Clamp(double x,double min,double max){return Math.Max(min,Math.Min(max,x));}
         static double Ease(double t){return t*t*(3-2*t);}
@@ -27,7 +27,10 @@ namespace MellowDesktop {
             var stamp=new InputStamp{size=8};
             var cursor=Forms.Cursor.Position;
             if(GetLastInputInfo(ref stamp) && previousInput!=0 && stamp.tick!=previousInput &&
-               cursor==previousCursor) attentiveUntil=now+1.8;
+               cursor==previousCursor) {
+                if(now>=attentiveUntil) attentionStarted=now;
+                attentiveUntil=now+1.8;
+            }
             previousCursor=cursor;previousInput=stamp.tick;
         }
         Rect Bounds() {

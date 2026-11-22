@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -54,6 +54,21 @@ namespace MellowDesktop {
                 return new Point3D(x+rx*Math.Sin(a)*Math.Cos(b), y+ry*Math.Cos(a), z+rz*Math.Sin(a)*Math.Sin(b));
             });
         }
+        readonly double soleInsetFraction;
+
+        // The idle feet are untransformed meshes in model space. Project their
+        // lowest visible point onto the vertical axis of the square viewport.
+        static double SoleInset(OrthographicCamera camera, Model3DGroup[] soles) {
+            var right=Vector3D.CrossProduct(camera.LookDirection,camera.UpDirection);
+            var up=Vector3D.CrossProduct(right,camera.LookDirection);
+            up.Normalize();
+            double lowest=double.PositiveInfinity;
+            foreach(var sole in soles)
+                foreach(GeometryModel3D mesh in sole.Children)
+                    foreach(var point in ((MeshGeometry3D)mesh.Geometry).Positions)
+                        lowest=Math.Min(lowest,Vector3D.DotProduct(point-camera.Position,up));
+            return .5+lowest/camera.Width;
+        }
         readonly HatTheatre clothGhost;
         double privacyCover;
         double trickStart=double.NegativeInfinity;
@@ -71,6 +86,7 @@ namespace MellowDesktop {
             view.Camera=new OrthographicCamera(new Point3D(0,.35,5),new Vector3D(0,0,-1),new Vector3D(0,1,0),2.1);
             view.Children.Add(new ModelVisual3D{Content=scene});
             if(!classic) view.Camera=new OrthographicCamera(new Point3D(0,.89,5),new Vector3D(0,-.06,-1),new Vector3D(0,1,0),2.75);
+            soleInsetFraction=SoleInset((OrthographicCamera)view.Camera,classic?boots:clothGhost.Feet);
             window=new Window{Title="Mellow desktop ghost",Width=116,Height=116,WindowStyle=WindowStyle.None,
                 AllowsTransparency=true,Background=Brushes.Transparent,ShowInTaskbar=false,
                 ShowActivated=false,Topmost=true,ResizeMode=ResizeMode.NoResize,Content=view,
@@ -99,10 +115,13 @@ namespace MellowDesktop {
             Navigate(walkTime,out stride,out weight,out direction);
             if(!guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
             double blend=1-Math.Exp(-dt*6);
-            double targetLean=state=="listen"||attending?-13:state=="think"?10:state=="rest"?7:climb?weight*9:0;
+            // A fresh typing burst gets one small acknowledgement, then he settles upright.
+            double attentionAge=now-attentionStarted;
+            double nod=attending && attentionAge<.6?3*Math.Sin(Math.PI*attentionAge/.6):0;
+            double targetLean=state=="listen"?-8:state=="think"?10:climb?weight*9:nod;
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
-            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*42*weight-9;
+            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*42*weight;
             double pivot=targetYaw-yaw;
             yaw+=pivot*blend;
             if(state=="privacy" || Math.Abs(pivot)>70) stride+=Math.Sin(yaw*Math.PI/36)*Math.Min(1,Math.Abs(pivot)/35);
@@ -114,7 +133,7 @@ namespace MellowDesktop {
             var turn=new Transform3DGroup();
             turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),yaw)));
             turn.Children.Add(new ScaleTransform3D(1+spring*.065,1-spring*.16,1,0,-.34,0));
-            turn.Children.Add(new TranslateTransform3D(0,hop+.044*Math.Abs(stride),0));
+            turn.Children.Add(new TranslateTransform3D(0,hop+(clothGhost==null?.044*Math.Abs(stride):0),0));
             parts.Transform=turn;
             for(int i=0;i<2;i++) {
                 double step=stride*(2*i-1);
@@ -178,6 +197,28 @@ namespace MellowDesktop {
             }
             using(var output=System.IO.File.Create(path)) gif.Save(output);
         }
+        void VerifyStandingPose() {
+            // Render the full viewport, preserving the transparent space beneath the soles.
+            var content=(FrameworkElement)window.Content;
+            int width=(int)content.ActualWidth,height=(int)content.ActualHeight;
+            var image=new System.Windows.Media.Imaging.RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);
+            image.Render(content);
+            var data=new byte[width*height*4];
+            image.CopyPixels(data,width*4,0);
+            for(int y=height-1;y>=0;y--)
+                for(int x=0;x<width;x++)
+                    if(data[(y*width+x)*4+3]>=96) {
+                        var screen=content.PointToScreen(new Point(0,y+1));
+                        var source=PresentationSource.FromVisual(content);
+                        double bottom=source.CompositionTarget.TransformFromDevice.Transform(screen).Y;
+                        double gap=floorY-bottom;
+                        Console.WriteLine("Standing pose: floor gap {0:F2} DIP, yaw {1:F1}, lean {2:F1}",gap,yaw,lean);
+                        if(Math.Abs(gap)>1.5 || Math.Abs(yaw)>.01 || Math.Abs(lean)>.01)
+                            throw new InvalidOperationException("Standing pose missed the floor or neutral orientation.");
+                        return;
+                    }
+            throw new InvalidOperationException("Standing pose did not render.");
+        }
         void TurnHead(double degrees,double now) {
             body.Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),
                 degrees+(state=="speak"?2*Math.Sin(now*5):0)),0,.12,0);
@@ -233,6 +274,13 @@ namespace MellowDesktop {
             ghost.foreground=GetForegroundWindow();
             ghost.Pose(0);
             ghost.window.Show();
+            if(verify) {
+                ghost.window.UpdateLayout();
+                // The real taskbar rectangle becomes available once the overlay has a window handle.
+                ghost.sampledAt=-1;
+                ghost.Pose(0);
+                ghost.VerifyStandingPose();
+            }
             ghost.time.Start();
             ghost.timer.Start();
             ghost.window.Closed+=delegate {Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);};

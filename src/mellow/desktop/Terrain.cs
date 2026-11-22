@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -29,7 +29,7 @@ namespace MellowDesktop {
     double floorSupportReaction(double age){return reaction*Math.Exp(-age*4)*Math.Sin(age*15);}
     bool quickDrop, descending;
     double lastRise=-10, nextDodge;
-    double FootInset {get{return size*(clothGhost==null?.09:.06);}}
+    double FootInset {get{return size*soleInsetFraction;}}
     Rect RectFor(IntPtr h){
         NativeRect r;
         var src=PresentationSource.FromVisual(window);
