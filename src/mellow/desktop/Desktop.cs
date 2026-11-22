@@ -56,6 +56,7 @@ namespace MellowDesktop {
         }
         void InitDesktop() {
             if(!verify) {
+                rises=Math.Min(6,Math.Max(0,Pref("TaskbarRises",0)));
                 size=Math.Max(80,Math.Min(176,Pref("Size",116)));
                 offset=Pref("Offset",30); lift=Pref("Lift",0);
             }
@@ -104,8 +105,20 @@ namespace MellowDesktop {
             };
             if(verify && verifyChat!="1") return;
             menu=new Forms.ContextMenuStrip();
+            if(clothGhost!=null) menu.Items.Add("Perform hat trick",null,delegate {trickStart=time.Elapsed.TotalSeconds;Signal("perform","",15);});
+            var visionMenu=new Forms.ToolStripMenuItem("Inspect selected region locally");
+            visionMenu.DropDownItems.Add("Show me the error",null,delegate {InspectRegion("error");});
+            visionMenu.DropDownItems.Add("Compare visible products",null,delegate {InspectRegion("compare");});
+            visionMenu.DropDownItems.Add("Show unfinished checklist item",null,delegate {InspectRegion("checkpoint");});
+            menu.Items.Add(visionMenu);
+            menu.Items.Add("Open project checkpoint…",null,delegate {OpenCheckpoint();});
+            menu.Items.Add("Perch on a window",null,delegate {Later(delegate {SelectWindow(false);});});
+            menu.Items.Add("Watch a progress bar",null,delegate {Later(WatchProgress);});
+            menu.Items.Add("Dismiss / stop watching",null,delegate {dismissed=true;progressElement=null;CancelTarget();Signal("idle","",0);});
+            menu.Items.Add("Leave ledge",null,delegate {LeavePerch();CancelTarget();});
+            menu.Items.Add("Close a window…",null,delegate {Later(delegate {SelectWindow(true);});});
             menu.Items.Add("Chat with Mellow",null,delegate {OpenChat();});
-            menu.Items.Add("Move ghost (drag it once)",null,delegate {window.Show(); moving=true; SetPassive(false);});
+            menu.Items.Add("Move ghost (drag it once)",null,delegate {window.Show();LeavePerch();CancelTarget(); moving=true; SetPassive(false);});
             var pass=new Forms.ToolStripMenuItem("Click through ghost (restore from tray)"){CheckOnClick=true};
             pass.CheckedChanged+=delegate {passThrough=pass.Checked;SetPassive(passThrough);};
             menu.Items.Add(pass);
@@ -115,7 +128,7 @@ namespace MellowDesktop {
                 delay.Tick+=delegate {delay.Stop();if(!quitting)PointAtControl();};delay.Start();
             });
             menu.Items.Add("Climb to the top edge",null,delegate {
-                var b=Bounds();guiding=false;pathStage=1;
+                LeavePerch();CancelTarget();var b=Bounds();pathStage=1;
                 Travel(new Point(window.Left<b.Left+b.Width/2?b.Left:b.Right,window.Top),walkTime,false);
                 holdUntil=walkTime+travel+.2;Signal("idle","",0);
             });
@@ -161,6 +174,7 @@ namespace MellowDesktop {
             };
             window.Closed+=delegate {
                 quitting=true;
+                if(checklist!=null)checklist.Close();
                 if(guideKey) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey+1);
                 if(hotkeyRegistered) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey);
                 if(backend!=null) {

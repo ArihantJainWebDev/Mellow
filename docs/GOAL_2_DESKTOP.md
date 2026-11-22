@@ -26,3 +26,19 @@ A clean install built the 0.2.0rc1 wheel and passed 49 tests. A Windows smoke ru
 ## Screen movement and attention
 
 The ghost can walk to a side, climb to the upper edge and float across the primary work area. Right-click and select **Climb to the top edge** for an immediate route. Its head, shoulder angles and mouth blend toward each pose over several frames. Activity outside chat uses a Windows last-input timestamp and a stationary pointer as an approximate typing cue. It reads no characters. To point, hover over an accessible button or hyperlink and press Ctrl+Alt+P, or use the delayed menu action. Only the target type and bounds are used locally. Unexposed controls cannot be identified this way.
+
+Use the [character behavior brief](CHARACTER_BEHAVIOR.md) to review timing, body language and how Mellow interacts with the desktop.
+
+## Desktop signals and one-shot vision
+
+The desktop reads primary-display taskbar and selected window rectangles. Right-click **Perch on a window**, then hover over a restored application with room above its title bar. The ghost rides the top edge as the window moves. Revealing the bottom taskbar while the ghost stands there triggers a spring reaction. A local familiarity counter softens later encounters. Top-edge travel can lead to a hang and an umbrella descent. The accessibility guide refreshes a supported button or hyperlink's bounds while pointing. Hiding the control releases the target.
+
+**Inspect selected region locally** opens a drag selector for an error, product comparison or visible checklist. Esc cancels. One screenshot of the chosen region goes directly to LM Studio on loopback. The application keeps the image in memory. The model returns a short description and optional approximate coordinates. Results describe the moment of selection. Start LM Studio and load Qwen3-VL first. Set the process environment variable MELLOW_VISION_MODEL to choose another installed vision model. Chat remains separately hosted on Groq.
+
+**Open project checkpoint** reads the first unfinished Markdown checkbox in a file you select. **Watch a progress bar** uses an accessible numeric range; reaching 100% alone cannot establish a successful build. **Close a window** works only for a confirmed target exposing a supported Close button. Mellow requests normal OS closure after reaching the target and leaves save dialogs to the owner. **Dismiss / stop watching** clears attention to the current target.
+
+### Verification and remaining dependencies
+
+The Windows renderer and deterministic climb check ran successfully. The offline suite passed 51 tests. A real loopback Qwen3-VL request identified “missing file demo.py” in a generated error screenshot. This verifies content reading on that fixture; the reported center coordinates do not demonstrate word-level localization. The screen selector, taskbar timing, window-close interaction, progress watching and ledge behavior require hands-on checks across the owner's applications.
+
+The behavior brief remains a creative target. Ambient mic/camera, automatic semantic monitoring, mail and portal accounts, reliable build success/failure events, project-wide checkpoint inference, persistent learned rituals, physically solved contact and collision, and fully authored falls, sitting, recovery and umbrella folding are outstanding. The current gestures and timing are procedural. The preview privacy pose is a gesture; the selector captures only on explicit release.

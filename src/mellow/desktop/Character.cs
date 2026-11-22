@@ -61,10 +61,14 @@ namespace MellowDesktop {
                         .397-side*(t-.5)*.046+thickness*Math.Sin(b));
                 });
                 var shoulder=new Model3DGroup();arms[i]=shoulder;body.Children.Add(shoulder);
-                Oval(shoulder,"#DCCEEC",side*.681,.166,.16,.112,.18,.115);
                 shoulder.Children.Add(wrists[i]);
-                Oval(wrists[i],"#E0D1EC",side*.724,.035,.23,.12,.148,.125);
-                Oval(wrists[i],"#E8DAF1",side*.642,.058,.31,.065,.085,.064);
+                Mesh(wrists[i],"#E2D5ED",delegate(double a,double b){
+                    // One pillowy lobe from the shoulder to the rounded fingertip.
+                    double t=(1-Math.Cos(a))/2;
+                    double radius=.133*Math.Sin(a)*(1-.18*t);
+                    return new Point3D(side*(.61+.104*Math.Sin(a)+.075*t)+radius*Math.Cos(b),
+                        .305-.389*t,.188+.079*t+.9*radius*Math.Sin(b));
+                });
                 feet[i]=new Model3DGroup();parts.Children.Add(feet[i]);feet[i].Children.Add(boots[i]);
                 Oval(boots[i],"#CDBBD9",side*.251,-.24,.045,.106,.115,.103);
                 Oval(boots[i],"#D6C6E1",side*.252,-.334,.132,.154,.103,.205);
@@ -79,7 +83,7 @@ namespace MellowDesktop {
                 double side=i*2-1;
                 double angle=i==0?armLeft:armRight;
                 wrists[i].Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(1,0,0),
-                    -angle*.32+step*side*10),side*.70,.13,.20);
+                    -angle*.32+step*side*10),side*.61,.286,.19);
                 boots[i].Transform=new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(1,0,0),
                     side*step*18),side*.25,-.25,.06);
             }

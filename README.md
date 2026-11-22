@@ -46,3 +46,5 @@ Start `python -m mellow.avatar` from this folder. Click the ghost to chat or rig
 ### Hat trick character study
 
 Run `python -m mellow.avatar --hat-trick` for the separate real-time WPF character study. Space pauses, R replays, arrow keys rotate, Tab changes between close-up and small-window scale, and Esc exits. The pearl sheet and brim deform procedurally. The hat and folded umbrella are original local meshes. [Four runtime poses](docs/visuals/hat-trick-runtime.png).
+
+The desktop menu includes local single-region vision, tracked window ledges and accessible controls, and Markdown project checkpoints. See the [desktop behavior and verification guide](docs/GOAL_2_DESKTOP.md).

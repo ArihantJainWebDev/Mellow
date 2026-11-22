@@ -34,7 +34,7 @@ namespace MellowDesktop {
             var a=SystemParameters.WorkArea;
             // The transparent caption space sits above the model's crown.
             double top=a.Top-(window.Height-size);
-            return new Rect(a.Left,top,Math.Max(0,a.Width-window.Width),Math.Max(0,a.Bottom-window.Height+4-top));
+            return new Rect(a.Left,top,Math.Max(0,a.Width-window.Width),Math.Max(0,(double.IsNaN(floorY)?a.Bottom:floorY)-window.Height+FootInset-top));
         }
         void Travel(Point next,double clock,bool vertical) {
             var b=Bounds();origin=new Point(window.Left,window.Top);
@@ -51,13 +51,7 @@ namespace MellowDesktop {
                     if(type!=ControlType.Button && type!=ControlType.Hyperlink)continue;
                     var rect=element.Current.BoundingRectangle;
                     if(rect.IsEmpty || rect.Width<=0 || rect.Height<=0)break;
-                    var convert=PresentationSource.FromVisual(window).CompositionTarget.TransformFromDevice;
-                    var center=convert.Transform(new Point(rect.Left+rect.Width/2,rect.Top+rect.Height/2));
-                    pointingLeft=center.X<SystemParameters.WorkArea.Left+SystemParameters.WorkArea.Width/2;
-                    var next=new Point(center.X-window.Width/2+(pointingLeft?1:-1)*(size*.46+Math.Min(rect.Width/2,100)),
-                                       center.Y-window.Height+size*.44);
-                    guiding=true;Travel(next,walkTime,false);holdUntil=departure+travel+4;
-                    Signal("guide","Coming over…",travel+.3);return;
+                    perch=IntPtr.Zero;CancelTarget();target=element;BeginTarget();return;
                 }
             } catch(ElementNotAvailableException) {} catch(UnauthorizedAccessException) {}
               catch(InvalidOperationException) {} catch(COMException) {}
@@ -70,13 +64,14 @@ namespace MellowDesktop {
                 origin=destination=new Point(window.Left,window.Top);placed=true;holdUntil=clock+6;
             }
             if(!moving && clock>=holdUntil){
-                if(guiding){guiding=false;pathStage=0;}
+                if(guiding){CancelTarget();pathStage=0;}
                 Point next;
+                descending=false;
                 switch(pathStage++%5){
                     case 0: next=new Point(destination.X<b.Left+b.Width/2?b.Left:b.Right,destination.Y);break;
                     case 1: next=new Point(destination.X,b.Top);break;
                     case 2: next=new Point(b.Left+b.Width*(.15+.7*random.NextDouble()),b.Top);break;
-                    case 3: next=new Point(b.Left+b.Width*random.NextDouble(),b.Top+b.Height*(.25+.45*random.NextDouble()));break;
+                    case 3: descending=true;next=new Point(b.Left+b.Width*(.25+.5*random.NextDouble()),b.Bottom);break;
                     default: next=new Point(b.Right-offset,b.Bottom-lift);break;
                 }
                 Travel(next,clock,pathStage%5==2);
@@ -85,8 +80,13 @@ namespace MellowDesktop {
             if(moving){step=weight=0;direction=1;return;}
             double u=travel<=0?1:Clamp((clock-departure)/travel,0,1);
             var pos=origin+(destination-origin)*Ease(u);
+            if(descending && !guiding)pos.X+=Math.Sin(u*4*Math.PI)*Math.Sin(u*Math.PI)*18;
+            pos.X=Clamp(pos.X,b.Left,b.Right);pos.Y=Clamp(pos.Y,b.Top,b.Bottom);
+            double blend=.18;
+            glideAmount+=((descending && !guiding && u>0 && u<1?1:0)-glideAmount)*blend;
+            hangAmount+=((climb && u>=.96 && !guiding?1:0)-hangAmount)*blend;
             if(!moving){window.Left=pos.X;window.Top=pos.Y;}
-            if(guiding && u>=1 && state!="point")Signal("point","Here",4);
+            if(guiding && perch==IntPtr.Zero && u>=1 && state!="point")Signal("point",pointCaption,4);
             weight=Math.Sin(Math.PI*u);
             step=Math.Sin((clock-departure)*8)*weight;
             direction=destination.X<origin.X?-1:1;

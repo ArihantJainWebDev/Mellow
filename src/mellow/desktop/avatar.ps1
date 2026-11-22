@@ -1,4 +1,4 @@
-﻿param([switch]$HatTrick, [switch]$Verify, [string]$Preview)
+﻿param([switch]$Classic, [switch]$HatTrick, [switch]$Verify, [string]$Preview)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore,PresentationFramework,WindowsBase,System.Xaml,System.Windows.Forms,System.Drawing,UIAutomationClient,UIAutomationTypes
 $references = @(
@@ -17,10 +17,10 @@ if ($HatTrick) {
     [MellowDesktop.HatTheatre]::Run($Preview)
     return
 }
-Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot Character.cs)) -ReferencedAssemblies $references
+Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot Character.cs),(Join-Path $PSScriptRoot Terrain.cs),(Join-Path $PSScriptRoot RegionVision.cs),(Join-Path $PSScriptRoot Checkpoint.cs),(Join-Path $PSScriptRoot HatTheatre.cs)) -ReferencedAssemblies $references
 $closeSignal = $null
 if ($env:MELLOW_CLOSE_EVENT) {
     $closeSignal = [Threading.EventWaitHandle]::OpenExisting($env:MELLOW_CLOSE_EVENT)
 }
-[MellowDesktop.Ghost]::Run($Verify.IsPresent, $Preview, $closeSignal)
+[MellowDesktop.Ghost]::Run($Verify.IsPresent, $Preview, $closeSignal, $Classic.IsPresent)
 

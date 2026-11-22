@@ -16,6 +16,7 @@ namespace MellowDesktop {
     readonly Viewport3D view=new Viewport3D();
     readonly Model3DGroup actor=new Model3DGroup(), face=new Model3DGroup(), hat=new Model3DGroup(), umbrella=new Model3DGroup();
     readonly Model3DGroup[] feet={new Model3DGroup(),new Model3DGroup()};
+    readonly Model3DGroup canopy=new Model3DGroup();
     readonly Stopwatch watch=Stopwatch.StartNew();
     readonly DispatcherTimer timer=new DispatcherTimer();
     readonly OrthographicCamera camera=new OrthographicCamera();
@@ -100,6 +101,12 @@ namespace MellowDesktop {
             double u=.064+.085*v,r=.565*Math.Pow(1-u,.79);
             return new Point3D(.55*u*u*u+r*Math.Cos(a),.69*Math.Sin(u*P*.84)+.08*u+r*.27*u*Math.Cos(a),.87*r*Math.Sin(a));
         });
+        actor.Children.Add(canopy);
+        Surface(canopy,Fabric(56,135,137,18),12,48,(u,a)=>{
+            double radius=.68*u;
+            return new Point3D(radius*Math.Cos(a),.30*(1-u*u)-.046*Math.Cos(8*a)*u*u,radius*Math.Sin(a));
+        });
+        Oval(canopy,ColorMat("#956943"),0,-.30,0,.018,.34,.018);
         actor.Children.Add(umbrella);
         var wood=ColorMat("#976940");var teal=Fabric(56,135,137,8);
         Surface(umbrella,teal,24,48,(u,a)=>{
@@ -113,10 +120,11 @@ namespace MellowDesktop {
         });
         Surface(umbrella,ColorMat("#C29960"),3,32,(u,a)=>new Point3D(.11*Math.Cos(a),.35+.032*u,.11*Math.Sin(a)));
     }
-    void Animate(double t){
+    internal Model3DGroup Model {get {return actor;}}
+    internal void Animate(double t,double? desktopStep=null,double left=0,double right=0,double blink=1,double glide=0,double cover=0){
         // Return through the pickup poses at the end so the loop joins cleanly.
         double s=t<=9?t:Math.Max(0,9-(t-9)*1.5);
-        double walk=Beat(s,0,2),step=Math.Sin(4*P*walk),bob=.044*Math.Abs(step);
+        double walk=Beat(s,0,2),step=desktopStep??Math.Sin(4*P*walk),bob=.044*Math.Abs(step);
         double reach=Beat(s,2,3.1),lift=Beat(s,3.1,4.25),lower=Beat(s,4.4,5.9);
         double dig=Beat(s,5.9,6.7),reveal=Beat(s,6.8,7.95);
         double settle=Math.Sin((s-7.9)*12)*Math.Exp(-Math.Max(0,s-7.9)*4)*Beat(s,7.9,8.1);
@@ -124,6 +132,7 @@ namespace MellowDesktop {
         double hx=.01+.48*lower,hy=.964+.53*lift-1.19*lower,hz=.035+.50*lower;
         double pitch=-9+165*lower,roll=6*step-12*lift+16*lower+3*settle;
         hat.Transform=Pose(hx,hy,hz,pitch,roll,1);
+        canopy.Transform=Pose(.55,1.52,.13,0,-10,glide);
         var fabric=new Point3DCollection(clothRest.Length);
         for(int k=0;k<clothRest.Length;k++){
             double h=(double)(k/77)/44,a=(k%77)*2*P/76;
@@ -137,6 +146,9 @@ namespace MellowDesktop {
             p.X+=w*reach*reachX+sway*(1-h)+.029*hem*Math.Sin(5*a-10*walk)*Math.Abs(step);
             p.Y+=w*reach*reachY+hem*.115*knee*Bell((Math.Sin(a)-.55)/.5);
             p.Z+=w*reach*reachZ+hem*.07*knee*Math.Max(0,Math.Sin(a));
+            double gesture=(side<0?left:right)/120;
+            p.X+=side*w*.18*gesture;p.Y+=w*.55*gesture;
+            p.X-=side*w*.64*cover;p.Y+=w*.41*cover;p.Z+=w*.42*cover;
             fabric.Add(p);
         }
         sheet.Positions=fabric;
@@ -152,15 +164,15 @@ namespace MellowDesktop {
         }
         var hand=hat.Transform.Transform(new Point3D(-.815,0,.13));
         umbrella.Transform=Pose(hand.X+.45-.96*reveal,hand.Y+.01+.81*reveal,hand.Z+.11,-14,-22,.85*Beat(s,6.85,7.55));
-        actor.Transform=Pose(-.18+.34*walk,bob+.015*settle,0,0,1.6*step+2*reveal,1);
-        for(int i=0;i<2;i++)((GeometryModel3D)face.Children[i]).Transform=new ScaleTransform3D(1,1-.89*Bell((s-5.66)/.085),1,0,.65,0);
+        actor.Transform=Pose(desktopStep.HasValue?0:-.18+.34*walk,bob+.015*settle,0,0,1.6*step+2*reveal,1);
+        for(int i=0;i<2;i++)((GeometryModel3D)face.Children[i]).Transform=new ScaleTransform3D(1,blink*(1-.89*Bell((s-5.66)/.085)),1,0,.65,0);
     }
     void Camera(){
         double a=zoomAngle*P/180;camera.Position=new Point3D(4*Math.Sin(a),1.16,4*Math.Cos(a));
         camera.LookDirection=new Vector3D(-4*Math.Sin(a),-.38,-4*Math.Cos(a));camera.UpDirection=new Vector3D(0,1,0);camera.Width=3.65;
     }
-    HatTheatre(){
-        Build();var scene=new Model3DGroup();scene.Children.Add(actor);
+    internal HatTheatre(bool modelOnly=false){
+        Build();if(modelOnly)return;var scene=new Model3DGroup();scene.Children.Add(actor);
         // Feathered contact shadow grounds the little feet throughout the steps.
         var shadowBrush=new RadialGradientBrush(Color.FromArgb(115,21,14,22),Color.FromArgb(0,21,14,22));
         var floor=new MeshGeometry3D();

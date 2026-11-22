@@ -54,11 +54,15 @@ namespace MellowDesktop {
                 return new Point3D(x+rx*Math.Sin(a)*Math.Cos(b), y+ry*Math.Cos(a), z+rz*Math.Sin(a)*Math.Sin(b));
             });
         }
-        public Ghost(bool verify,string preview) {
+        readonly HatTheatre clothGhost;
+        double privacyCover;
+        double trickStart=double.NegativeInfinity;
+        public Ghost(bool verify,string preview,bool classic) {
             this.verify=verify;
             this.preview=preview;
             parts.Children.Add(body);
-            Sculpt();
+            if(classic) Sculpt();
+            else {clothGhost=new HatTheatre(true);body.Children.Add(clothGhost.Model);}
             var scene=new Model3DGroup();
             scene.Children.Add(new AmbientLight(Color.FromRgb(103,92,118)));
             scene.Children.Add(new DirectionalLight(Color.FromRgb(187,184,196),new Vector3D(.55,-.85,-.72)));
@@ -66,6 +70,7 @@ namespace MellowDesktop {
             scene.Children.Add(parts);
             view.Camera=new OrthographicCamera(new Point3D(0,.35,5),new Vector3D(0,0,-1),new Vector3D(0,1,0),2.1);
             view.Children.Add(new ModelVisual3D{Content=scene});
+            if(!classic) view.Camera=new OrthographicCamera(new Point3D(0,.89,5),new Vector3D(0,-.06,-1),new Vector3D(0,1,0),2.75);
             window=new Window{Title="Mellow desktop ghost",Width=116,Height=116,WindowStyle=WindowStyle.None,
                 AllowsTransparency=true,Background=Brushes.Transparent,ShowInTaskbar=false,
                 ShowActivated=false,Topmost=true,ResizeMode=ResizeMode.NoResize,Content=view,
@@ -87,30 +92,40 @@ namespace MellowDesktop {
             lastTick=now;
             if(state!="idle" && time.Elapsed.TotalSeconds>=until) Signal("idle","",0);
             NoticeActivity(now);
+            SenseTerrain(now);
             bool attending=state=="idle" && now<attentiveUntil;
-            if(!moving && (guiding || (!view.IsMouseOver && state=="idle" && !attending)))walkTime+=dt;
+            if(!moving && (guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending)))walkTime+=dt;
             double stride,weight,direction;
             Navigate(walkTime,out stride,out weight,out direction);
-            if(!guiding && (state!="idle" || attending)) {stride=0;weight=0;}
+            if(!guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
             double blend=1-Math.Exp(-dt*6);
             double targetLean=state=="listen"||attending?-13:state=="think"?10:state=="rest"?7:climb?weight*9:0;
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
             double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*42*weight-9;
-            yaw+=(targetYaw-yaw)*blend;
+            double pivot=targetYaw-yaw;
+            yaw+=pivot*blend;
+            if(state=="privacy" || Math.Abs(pivot)>70) stride+=Math.Sin(yaw*Math.PI/36)*Math.Min(1,Math.Abs(pivot)/35);
+            double age=Math.Max(0,now-reactionAt);
+            double spring=floorSupportReaction(age);
+            double hop=rises>=3 && age<.65?Math.Sin(age/.65*Math.PI)*.18:0;
             mouthOpen+=((state=="speak"?.72+.27*Math.Sin(now*13):attending?.52:.38)-mouthOpen)*blend;
-            lip.Transform=new ScaleTransform3D(1,mouthOpen,1,0,.404,.518);
+            if(clothGhost==null) lip.Transform=new ScaleTransform3D(1,mouthOpen,1,0,.404,.518);
             var turn=new Transform3DGroup();
             turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),yaw)));
-            turn.Children.Add(new TranslateTransform3D(0,.013*Math.Sin(now*2)+.044*Math.Abs(stride),0));
+            turn.Children.Add(new ScaleTransform3D(1+spring*.065,1-spring*.16,1,0,-.34,0));
+            turn.Children.Add(new TranslateTransform3D(0,hop+.044*Math.Abs(stride),0));
             parts.Transform=turn;
             for(int i=0;i<2;i++) {
                 double step=stride*(2*i-1);
-                feet[i].Transform=new TranslateTransform3D(direction*.11*step,.077*Math.Max(0,step),.04*step);
+                if(clothGhost==null) feet[i].Transform=new TranslateTransform3D(direction*.11*step,.077*Math.Max(0,step),.04*step);
                 var arm=new Transform3DGroup();
                 bool active=(state=="point" && pointingLeft)?i==0:i==1;
                 double goal=active?(state=="offer"?119:state=="point"?83:state=="think"?48:
                     state=="speak"?31+12*Math.Sin(now*4):0):0;
+                if(i==1) goal=Math.Max(goal,144*Math.Max(hangAmount,glideAmount));
+                if(state=="privacy")goal=Math.Max(goal,125*Math.Min(1,Math.Abs(yaw)/165));
+                goal+=Math.Abs(spring)*(quickDrop?65:42);
                 if(climb && weight>.02)goal+=(48+37*step)*weight;
                 double angle=i==0?armLeft:armRight;
                 angle+=(goal-angle)*blend;
@@ -118,14 +133,20 @@ namespace MellowDesktop {
                 double side=i*2-1;
                 arm.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),side*angle),side*.608,.23,.18));
                 arm.Children.Add(new TranslateTransform3D(side*.009*angle/120,.012*Math.Sin(now*2),.06*Math.Abs(step)));
-                arms[i].Transform=arm;
+                if(clothGhost==null) arms[i].Transform=arm;
             }
-            Flex(dt,stride);
+            if(clothGhost==null) Flex(dt,stride);
             double blink=Math.Max(.09,Math.Min(1,Math.Abs(now%4.7-3.9)*8));
             var gaze=new Transform3DGroup();
             gaze.Children.Add(new ScaleTransform3D(1,state=="rest"?.15:blink,1,0,.59,0));
             gaze.Children.Add(new TranslateTransform3D(direction*.022*weight,0,0));
             eyes.Transform=gaze;
+            if(clothGhost!=null){
+                privacyCover+=((state=="privacy" && yaw>110?1:0)-privacyCover)*blend;
+                double elapsed=time.Elapsed.TotalSeconds-trickStart;
+                if(elapsed>=0 && elapsed<15) clothGhost.Animate(elapsed);
+                else clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover);
+            }
         }
         void CaptureMotion(string path) {
             var gif=new System.Windows.Media.Imaging.GifBitmapEncoder();
@@ -206,8 +227,8 @@ namespace MellowDesktop {
                 window.Close();
             }
         }
-        public static void Run(bool verify,string preview,System.Threading.EventWaitHandle closeSignal) {
-            var ghost=new Ghost(verify,preview);
+        public static void Run(bool verify,string preview,System.Threading.EventWaitHandle closeSignal,bool classic) {
+            var ghost=new Ghost(verify,preview,classic);
             ghost.closeSignal=closeSignal;
             ghost.foreground=GetForegroundWindow();
             ghost.Pose(0);
