@@ -4,10 +4,10 @@ Run `python -m mellow.avatar` from the same working folder as the CLI. Windows P
 
 | Check | Expected behavior |
 |---|---|
-| Keep typing in another app | The ghost blinks, walks and changes pose without activating a window. Ordinary mouse input passes through it. |
+| Keep typing in another app | The ghost blinks, walks and changes pose without activating a window. The painted ghost accepts clicks and pauses its walk when hovered. Click once for chat or right-click for controls. Full click-through is optional and can be reversed from the tray. |
 | Ctrl+Alt+M, or double-click the tray icon | Open the intentionally focusable chat. Type a question and press Enter. The ghost attends while you type, shows a thought cloud while preparing a reply, and displays a short speech caption as Groq streams. Full text stays in chat. |
 | Continuity | Send a fictional code word from desktop chat. Exit Mellow from the tray, run the CLI in the same folder, and ask for the word. Both interfaces use the same active session and database. |
-| Tray → Move ghost | Drag the ghost once to place it. The move ends on release and input passes through again. Choose a size and restart to check placement. |
+| Tray → Move ghost | Drag the ghost once to place it. The move ends on release and the prior click mode is restored. Choose a size and restart to check placement. |
 | Quiet and hide | Quiet suppresses captions. Hide removes the avatar surface. Use Exit Mellow for full shutdown. |
 | Preview a pose | Preview listen, think, point, offer, speak, rest and privacy without activating any sensors. A preview caption identifies a demonstration. |
 | Launch at sign-in | Explicitly toggle it in the tray. It registers the current interpreter and working folder for the current Windows user. Toggle again to remove it. |

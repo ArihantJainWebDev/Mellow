@@ -24,7 +24,7 @@ namespace MellowDesktop {
         readonly string preview;
         IntPtr foreground;
         int frames;
-        bool clickThrough, keptFocus = true;
+        bool passiveStyle, keptFocus = true;
 
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int index);
@@ -93,35 +93,40 @@ namespace MellowDesktop {
             scene.Children.Add(parts);
             view.Camera=new OrthographicCamera(new Point3D(0,.35,5),new Vector3D(0,0,-1),new Vector3D(0,1,0),2.1);
             view.Children.Add(new ModelVisual3D{Content=scene});
-            window=new Window{Width=116,Height=116,WindowStyle=WindowStyle.None,
+            window=new Window{Title="Mellow desktop ghost",Width=116,Height=116,WindowStyle=WindowStyle.None,
                 AllowsTransparency=true,Background=Brushes.Transparent,ShowInTaskbar=false,
                 ShowActivated=false,Topmost=true,ResizeMode=ResizeMode.NoResize,Content=view,
                 Focusable=false,WindowStartupLocation=WindowStartupLocation.Manual};
             InitDesktop();
             window.SourceInitialized+=delegate {
                 IntPtr h=new WindowInteropHelper(window).Handle;
-                const int flags=0x08000000|0x20|0x80; // NOACTIVATE, TRANSPARENT, TOOLWINDOW
-                SetWindowLong(h,-20,GetWindowLong(h,-20)|flags);
-                clickThrough=(GetWindowLong(h,-20)&flags)==flags;
+                const int flags=0x08000000|0x80; // NOACTIVATE and TOOLWINDOW; painted pixels receive clicks.
+                SetWindowLong(h,-20,(GetWindowLong(h,-20)|flags)&~0x20);
+                passiveStyle=(GetWindowLong(h,-20)&flags)==flags;
             };
             window.Closed+=delegate {timer.Stop();};
             timer.Interval=TimeSpan.FromMilliseconds(40);
             timer.Tick+=delegate {Frame();};
         }
+        readonly Random random=new Random();
+        double legStart, pause=8, duration=4, from, to=95;
         void Pose(double t) {
             // Each 16-second cycle contains a long rest, a short walk and another rest.
             double now=t;
             if(state!="idle" && time.Elapsed.TotalSeconds>=until) Signal("idle","",0);
-            if(!moving && state=="idle") walkTime+=Math.Max(0,t-lastTick);
+            if(!moving && !view.IsMouseOver && state=="idle") walkTime+=Math.Max(0,t-lastTick);
             lastTick=t;t=walkTime;
-            double cycle=Math.Floor(t/16), phase=t%16;
-            double u=Math.Max(0,Math.Min(1,(phase-8)/4));
-            double ease=u*u*(3-2*u), direction=cycle%2==0?-1:1;
+            // Pick a new destination and pause on each leg; hold position on hover.
+            if(t>=legStart+pause+duration) {
+                from=to; to=random.NextDouble()*Math.Min(170,SystemParameters.WorkArea.Width*.18);
+                legStart=t; pause=3+random.NextDouble()*9; duration=2+Math.Abs(to-from)/46;
+            }
+            double phase=t-legStart, u=Math.Max(0,Math.Min(1,(phase-pause)/duration));
+            double ease=u*u*(3-2*u), direction=to>=from?-1:1;
             double stride=Math.Sin(4*Pi*u), weight=Math.Sin(Pi*u);
             var area=SystemParameters.WorkArea;
-            double distance=Math.Min(132,area.Width*.18);
             if(!moving) {
-                window.Left=Math.Min(area.Right-window.Width,Math.Max(area.Left,area.Right-window.Width-offset-distance*(direction<0?ease:1-ease)));
+                window.Left=Math.Min(area.Right-window.Width,Math.Max(area.Left,area.Right-window.Width-offset-(from+(to-from)*ease)));
                 window.Top=Math.Min(area.Bottom-window.Height+4,Math.Max(area.Top,area.Bottom-window.Height+4-lift));
             }
             if(state!="idle") {stride=0;weight=0;}
@@ -143,7 +148,7 @@ namespace MellowDesktop {
             double blink=Math.Max(.09,Math.Min(1,Math.Abs(now%4.7-3.9)*8));
             var gaze=new Transform3DGroup();
             gaze.Children.Add(new ScaleTransform3D(1,state=="rest"?.15:blink,1,0,.59,0));
-            gaze.Children.Add(new TranslateTransform3D(direction*.022*Math.Max(0,1-Math.Abs(phase-8)),0,0));
+            gaze.Children.Add(new TranslateTransform3D(direction*.022*Math.Max(0,1-Math.Abs(phase-pause)),0,0));
             eyes.Transform=gaze;
         }
         void CaptureMotion(string path) {
@@ -219,8 +224,8 @@ namespace MellowDesktop {
             ghost.window.Closed+=delegate {Dispatcher.CurrentDispatcher.BeginInvokeShutdown(DispatcherPriority.Background);};
             Dispatcher.Run();
             if(verify) {
-                Console.WriteLine("Frames={0} passiveWindow={1} focusPreserved={2}",ghost.frames,ghost.clickThrough,ghost.keptFocus);
-                if(!ghost.clickThrough || (ghost.verifyChat=="1" ? ghost.verifyStage!=3 : !ghost.keptFocus || ghost.frames<12)) throw new InvalidOperationException("Avatar smoke check failed.");
+                Console.WriteLine("Frames={0} passiveWindow={1} focusPreserved={2}",ghost.frames,ghost.passiveStyle,ghost.keptFocus);
+                if(!ghost.passiveStyle || (ghost.verifyChat=="1" ? ghost.verifyStage!=3 : !ghost.keptFocus || ghost.frames<12)) throw new InvalidOperationException("Avatar smoke check failed.");
             }
         }
     }

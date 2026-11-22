@@ -30,6 +30,7 @@ namespace MellowDesktop {
         TextBlock bubbleText, tail;
         Canvas cloud;
         Grid bubbleFace;
+        bool dragConsumed, passThrough;
         bool quiet, moving, quitting, ready, hotkeyRegistered;
         double offset=30, lift=0, size=116, until, walkTime, lastTick;
         readonly string verifyChat=Environment.GetEnvironmentVariable("MELLOW_VERIFY_CHAT");
@@ -81,17 +82,34 @@ namespace MellowDesktop {
             };
             bubbleStack.Children.Add(bubbleFace); bubbleStack.Children.Add(tail);
             grid.Children.Add(bubbleStack); window.Content=grid; LayoutAvatar();
+            view.Cursor=System.Windows.Input.Cursors.Hand;
+            window.MouseRightButtonUp+=delegate(object sender,System.Windows.Input.MouseButtonEventArgs e) {
+                if(menu==null) return;
+                e.Handled=true;
+                menu.Show(Forms.Cursor.Position);
+            };
+            window.MouseLeftButtonUp+=delegate(object sender,System.Windows.Input.MouseButtonEventArgs e) {
+                if(moving || dragConsumed || menu==null) {dragConsumed=false;return;}
+                e.Handled=true;
+                OpenChat();
+            };
             window.MouseLeftButtonDown+=delegate {
+                dragConsumed=false;
                 if(!moving) return;
+                dragConsumed=true;
                 window.DragMove();
                 var r=SystemParameters.WorkArea;
-                walkTime=0; offset=r.Right-window.Width-window.Left; lift=r.Bottom-window.Height+4-window.Top;
-                moving=false; SetPassive(true); SavePosition();
+                from=0;to=95;legStart=walkTime; offset=r.Right-window.Width-window.Left; lift=r.Bottom-window.Height+4-window.Top;
+                moving=false; SetPassive(passThrough); SavePosition();
             };
             if(verify && verifyChat!="1") return;
             menu=new Forms.ContextMenuStrip();
             menu.Items.Add("Chat with Mellow",null,delegate {OpenChat();});
             menu.Items.Add("Move ghost (drag it once)",null,delegate {window.Show(); moving=true; SetPassive(false);});
+            var pass=new Forms.ToolStripMenuItem("Click through ghost (restore from tray)"){CheckOnClick=true};
+            pass.CheckedChanged+=delegate {passThrough=pass.Checked;SetPassive(passThrough);};
+            menu.Items.Add(pass);
+            window.Loaded+=delegate {if(!verify) Signal("offer","Click to chat. Right-click for controls.",7);};
             foreach(int n in new int[]{82,116,156}) {
                 int pixels=n;
                 menu.Items.Add("Size "+pixels,null,delegate {size=pixels;LayoutAvatar();SavePosition();});
