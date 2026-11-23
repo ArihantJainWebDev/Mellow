@@ -37,6 +37,7 @@ namespace MellowDesktop {
         body.Children.Add(new TextBlock{Text="Ask Mellow",FontWeight=FontWeights.SemiBold,Foreground=Ink(213,200,235)});
         body.Children.Add(input);
         var row=new DockPanel();
+        var close=Choice("Close",HideComposer);close.Foreground=Brushes.White;DockPanel.SetDock(close,Dock.Right);row.Children.Add(close);
         var send=Choice("Send ↑",delegate{if(ready && input.Text.Trim().Length>0)SendInput();});
         send.Foreground=Brushes.White;DockPanel.SetDock(send,Dock.Right);row.Children.Add(send);
         var notice=Choice("Notice",delegate{
@@ -64,22 +65,28 @@ namespace MellowDesktop {
         if(previousApp!=IntPtr.Zero)SetForegroundWindow(previousApp);
     }
     static TextBlock PageLabel(){
-        return new TextBlock{Width=256,TextWrapping=TextWrapping.Wrap,FontSize=15,FontFamily=new FontFamily("Segoe UI"),
+        return new TextBlock{MaxWidth=256,TextWrapping=TextWrapping.Wrap,FontSize=15,FontFamily=new FontFamily("Segoe UI"),
             LineHeight=20,LineStackingStrategy=LineStackingStrategy.BlockLineHeight,Foreground=Ink(43,34,58)};
     }
     void CreateReader(){
-        pageText=PageLabel();pageText.Height=80;
+        pageText=PageLabel();
         pageNumber=new TextBlock{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(4,0,10,0)};
         var controls=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,4,0,0)};
         prevPage=Choice("Back",delegate{if(page>0){page--;visibleEnd=starts[page+1];pageEnd=visibleEnd;PaintPage();}});
         nextPage=Choice("Next",AdvancePage);
         controls.Children.Add(pageNumber);controls.Children.Add(prevPage);controls.Children.Add(nextPage);
-        controls.Children.Add(Choice("Copy",delegate{try{Clipboard.SetText(reply.ToString());}catch(System.Runtime.InteropServices.ExternalException){}}));
-        controls.Children.Add(Choice("Close",DismissReply));
+        controls.Children.Add(Choice("⧉",delegate{try{Clipboard.SetText(reply.ToString());}catch(System.Runtime.InteropServices.ExternalException){}}));
+        controls.Children.Add(Choice("×",DismissReply));
+        ((Button)controls.Children[3]).ToolTip="Copy reply";((Button)controls.Children[4]).ToolTip="Dismiss reply";
         var body=new StackPanel();body.Children.Add(pageText);body.Children.Add(controls);
+        var shell=new StackPanel();
+        var tint=new LinearGradientBrush(Color.FromRgb(255,251,255),Color.FromRgb(233,219,250),90);
+        shell.Children.Add(new Border{Background=tint,BorderBrush=Ink(199,182,211),BorderThickness=new Thickness(1),
+            CornerRadius=new CornerRadius(19,19,16,12),Padding=new Thickness(12,7,10,4),Child=body});
+        shell.Children.Add(new System.Windows.Shapes.Polygon{Fill=Ink(233,219,250),Width=16,Height=8,
+            Points=new PointCollection{new Point(0,0),new Point(16,0),new Point(6,8)}});
         replyPopup=new Popup{Placement=PlacementMode.AbsolutePoint,StaysOpen=true,AllowsTransparency=true,
-            Focusable=false,Child=new Border{Background=Ink(251,246,254),BorderBrush=Ink(199,182,211),
-            BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(14),Padding=new Thickness(12,8,12,6),Child=body}};
+            Focusable=false,Child=shell};
     }
     void DismissReply(){
         dismissedReply=true;reading=false;if(replyPopup!=null)replyPopup.IsOpen=false;
@@ -114,6 +121,8 @@ namespace MellowDesktop {
     void PaintPage(){
         pageText.Text=reply.ToString(starts[page],visibleEnd-starts[page]);
         pageNumber.Text=(page+1).ToString(CultureInfo.InvariantCulture);
+        var paging=page>0 || pageEnd<reply.Length?Visibility.Visible:Visibility.Collapsed;
+        pageNumber.Visibility=prevPage.Visibility=nextPage.Visibility=paging;
         prevPage.IsEnabled=page>0;
         nextPage.IsEnabled=visibleEnd<pageEnd||pageEnd<reply.Length;
         nextPage.Content=visibleEnd<pageEnd?"Reveal":"Next";
@@ -129,16 +138,18 @@ namespace MellowDesktop {
     int measuredLength=-1,measuredPage=-1;
     void TickReply(double now){
         if(!reading)return;
-        bool show=!quiet && window.IsVisible && (chatWindow==null||!chatWindow.IsVisible);
+        bool show=!quiet && window.IsVisible;
         if(!show){replyPopup.IsOpen=false;if(state=="speak")state="read";return;}
         var bounds=SystemParameters.WorkArea;
-        double left=window.Left+window.Width/2-141;
-        double top=window.Top+window.Height-size-124;
-        if(top<bounds.Top)top=window.Top+window.Height;
-        replyPopup.HorizontalOffset=Clamp(left,bounds.Left,Math.Max(bounds.Left,bounds.Right-284));
-        replyPopup.VerticalOffset=Clamp(top,bounds.Top,Math.Max(bounds.Top,bounds.Bottom-130));
-        replyPopup.IsOpen=true;bubbleStack.Visibility=Visibility.Collapsed;
         RevealAt(now);
+        replyPopup.Child.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+        var extent=replyPopup.Child.DesiredSize;
+        double left=window.Left+window.Width/2-extent.Width/2;
+        double top=window.Top+window.Height-size-extent.Height+3;
+        if(top<bounds.Top)top=window.Top+window.Height;
+        replyPopup.HorizontalOffset=Clamp(left,bounds.Left,Math.Max(bounds.Left,bounds.Right-extent.Width));
+        replyPopup.VerticalOffset=Clamp(top,bounds.Top,Math.Max(bounds.Top,bounds.Bottom-extent.Height));
+        replyPopup.IsOpen=true;bubbleStack.Visibility=Visibility.Collapsed;
     }
     void RevealAt(double now){
         if(measuredLength!=reply.Length || measuredPage!=page || pageEnd==starts[page]){
@@ -158,6 +169,10 @@ namespace MellowDesktop {
         var ghost=new Ghost(true,null,false,true);
         ghost.CreateComposer();
         if(!ghost.input.AcceptsReturn || ghost.chatWindow.ShowInTaskbar)throw new InvalidOperationException("Composer configuration");
+        ghost.ResetReply();ghost.AddReply("Hi");ghost.RevealAt(0);
+        ghost.replyPopup.Child.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));
+        if(ghost.replyPopup.Child.DesiredSize.Width>120 || ghost.replyPopup.Child.DesiredSize.Height>82 ||
+           ghost.nextPage.Visibility!=Visibility.Collapsed)throw new InvalidOperationException("Oversized greeting");
         string unit="A long reply with emoji 🌿, हिन्दी, code and a line break.\n";
         var originalText=new StringBuilder();for(int i=0;i<20;i++)originalText.Append(unit);
         string original=originalText.ToString();

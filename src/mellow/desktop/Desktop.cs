@@ -97,7 +97,7 @@ namespace MellowDesktop {
             window.MouseRightButtonUp+=delegate(object sender,System.Windows.Input.MouseButtonEventArgs e) {
                 if(menu==null) return;
                 e.Handled=true;
-                menu.Show(Forms.Cursor.Position);
+                ShowGhostMenu();
             };
             window.MouseLeftButtonUp+=delegate(object sender,System.Windows.Input.MouseButtonEventArgs e) {
                 if(moving || dragConsumed || menu==null) {dragConsumed=false;return;}
@@ -225,6 +225,27 @@ namespace MellowDesktop {
             if(msg==0x0312 && w.ToInt32()==Hotkey) {OpenChat();handled=true;}
             return IntPtr.Zero;
         }
+        MenuItem GhostMenuItem(Forms.ToolStripMenuItem source){
+            var item=new MenuItem{Header=source.Text,IsEnabled=source.Enabled,IsChecked=source.Checked};
+            foreach(Forms.ToolStripItem child in source.DropDownItems){
+                var action=child as Forms.ToolStripMenuItem;
+                if(action!=null)item.Items.Add(GhostMenuItem(action));
+            }
+            if(item.Items.Count==0)item.Click+=delegate{source.PerformClick();};
+            return item;
+        }
+        void ShowGhostMenu(){
+            var popup=new ContextMenu{PlacementTarget=view,Placement=System.Windows.Controls.Primitives.PlacementMode.MousePoint,
+                StaysOpen=false,MaxHeight=SystemParameters.WorkArea.Height-12};
+            foreach(Forms.ToolStripItem node in menu.Items){
+                var action=node as Forms.ToolStripMenuItem;
+                if(action!=null)popup.Items.Add(GhostMenuItem(action));
+            }
+            popup.Items.Add(new Separator());
+            popup.Items.Add(new MenuItem{Header="Dismiss menu"});
+            popup.IsOpen=true;
+            popup.Focus();
+        }
         void SetPassive(bool value) {
             var h=new WindowInteropHelper(window).Handle;
             int style=GetWindowLong(h,-20);
@@ -258,7 +279,12 @@ namespace MellowDesktop {
             input.Focus();
         }
         void SendInput(){
-            string msg=input.Text.Trim();input.Clear();HideComposer();
+            string msg=input.Text.Trim();input.Clear();
+            string intent=DesktopIntent(msg);
+            if(intent.StartsWith("/browser ",StringComparison.OrdinalIgnoreCase) ||
+               intent.StartsWith("/screen watch",StringComparison.OrdinalIgnoreCase) ||
+               intent.StartsWith("/screen ask ",StringComparison.OrdinalIgnoreCase) ||
+               intent=="/point" || intent=="/close-window")HideComposer();
             ResetReply();
             if(WorkspaceCommand(msg))return;
             commandOutput.Clear();submitted=true;streamed=false;ready=false;input.IsEnabled=false;
