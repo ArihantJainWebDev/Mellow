@@ -70,6 +70,11 @@ namespace MellowDesktop {
         return new TextBlock{MaxWidth=256,TextWrapping=TextWrapping.Wrap,FontSize=15,FontFamily=new FontFamily("Segoe UI"),
             LineHeight=20,LineStackingStrategy=LineStackingStrategy.BlockLineHeight,Foreground=Ink(43,34,58)};
     }
+    StackPanel setupChoices;
+    void PaintSetupChoices(){
+        if(setupChoices!=null)setupChoices.Visibility=
+            proposed!=null && dialogueVersion==offerDialogue && DateTime.UtcNow<offerExpires?Visibility.Visible:Visibility.Collapsed;
+    }
     void CreateReader(){
         pageText=PageLabel();
         pageNumber=new TextBlock{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(4,0,10,0)};
@@ -81,6 +86,10 @@ namespace MellowDesktop {
         controls.Children.Add(Choice("×",DismissReply));
         ((Button)controls.Children[3]).ToolTip="Copy reply";((Button)controls.Children[4]).ToolTip="Dismiss reply";
         var body=new StackPanel();body.Children.Add(pageText);body.Children.Add(controls);
+        setupChoices=new StackPanel{Orientation=Orientation.Horizontal,Visibility=Visibility.Collapsed};
+        setupChoices.Children.Add(Choice("Restore setup",delegate{if(chatWindow!=null && chatWindow.IsActive)HideComposer();RestoreProposed();}));
+        setupChoices.Children.Add(Choice("Skip",delegate{proposed=null;DismissReply();}));
+        body.Children.Add(setupChoices);
         var shell=new StackPanel();
         var tint=new LinearGradientBrush(Color.FromRgb(255,251,255),Color.FromRgb(233,219,250),90);
         shell.Children.Add(new Border{Background=tint,BorderBrush=Ink(199,182,211),BorderThickness=new Thickness(1),
@@ -160,6 +169,7 @@ namespace MellowDesktop {
         if(paintedStart!=starts[page] || paintedEnd!=visibleEnd || paintedLength!=reply.Length){
             Format(pageText,starts[page],visibleEnd);paintedStart=starts[page];paintedEnd=visibleEnd;paintedLength=reply.Length;
         }
+        PaintSetupChoices();
         pageNumber.Text=(page+1).ToString(CultureInfo.InvariantCulture);
         var paging=page>0 || pageEnd<reply.Length?Visibility.Visible:Visibility.Collapsed;
         pageNumber.Visibility=prevPage.Visibility=nextPage.Visibility=paging;
@@ -219,6 +229,7 @@ namespace MellowDesktop {
         until=now+2;PaintPage();
     }
     public static void VerifyDialogue(){
+        VerifyAwareness();
         var ghost=new Ghost(true,null,false,true);
         ghost.CreateComposer();
         if(!ghost.input.AcceptsReturn || ghost.chatWindow.ShowInTaskbar)throw new InvalidOperationException("Composer configuration");

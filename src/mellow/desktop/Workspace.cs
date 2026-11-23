@@ -18,37 +18,50 @@ namespace MellowDesktop {
     DispatcherTimer watchTimer;
     int watchGeneration;
     bool sampling,showingScreenReply;
-    string observation="";
+    string observation="",previousImage="";
     DateTime observedAt;
 
     void StartWatching(){
         if(watchBadge!=null){LocalReply("Primary screen observation is already on.");return;}
-        watchGeneration++;observation="";
+        watchGeneration++;observation="";ClearActivity();
         var bar=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(8,2,4,2)};
         watchLabel=new TextBlock{Text="Screen on · local",VerticalAlignment=VerticalAlignment.Center};
         bar.Children.Add(watchLabel);
+        setupHint=Choice("Workspace?",delegate{
+            if(waitingSetup!=null && DateTime.UtcNow<offerExpires)
+                PresentSetup(waitingSetup,"Restore these familiar windows?","");
+        });
+        setupHint.Visibility=Visibility.Collapsed;bar.Children.Add(setupHint);
+        bar.Children.Add(Choice("Recent",delegate{DescribeActivity(true);}));
         bar.Children.Add(Choice("Stop",StopWatching));
         var area=SystemParameters.WorkArea;
         watchBadge=new Window{Title="Mellow screen observation",ShowActivated=false,ShowInTaskbar=false,
             Topmost=true,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,
             Background=Ink(245,237,251),SizeToContent=SizeToContent.WidthAndHeight,Left=area.Left+8,Top=area.Top+8,Content=bar};
         watchBadge.Closed+=delegate{
-            watchGeneration++;watchBadge=null;observation="";
+            watchGeneration++;watchBadge=null;ClearActivity();
             if(showingScreenReply)ResetReply();
             if(watchTimer!=null){watchTimer.Stop();watchTimer=null;}
             SystemEvents.SessionSwitch-=OnSessionChange;
         };
         watchBadge.Show();
+        SaveAwarenessPreference(1);
         SystemEvents.SessionSwitch+=OnSessionChange;
-        watchTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(12)};
-        watchTimer.Tick+=delegate{SampleScreen();};watchTimer.Start();SampleScreen();
+        watchTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
+        watchTimer.Tick+=delegate{PollActivity();};watchTimer.Start();PollActivity();
     }
     void OnSessionChange(object sender,SessionSwitchEventArgs e){
         if(e.Reason==SessionSwitchReason.SessionLock || e.Reason==SessionSwitchReason.SessionLogoff ||
            e.Reason==SessionSwitchReason.RemoteDisconnect || e.Reason==SessionSwitchReason.ConsoleDisconnect)
             window.Dispatcher.BeginInvoke(new Action(StopWatching));
     }
-    void StopWatching(){if(watchBadge!=null)watchBadge.Close();}
+    static void SaveAwarenessPreference(int enabled){
+        try{using(var key=Registry.CurrentUser.CreateSubKey(Prefs))key.SetValue("DesktopAwareness",enabled);}
+        catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}
+    }
+    void StopWatching(){
+        if(watchBadge!=null){if(!quitting)SaveAwarenessPreference(0);watchBadge.Close();}
+    }
     static bool CanObserveFocus(){
         try{
             var element=AutomationElement.FocusedElement;
@@ -69,19 +82,35 @@ namespace MellowDesktop {
             observation="";watchLabel.Text="Screen paused · focus";if(question.Length>0)LocalReply("Screen paused for this focus. Return to a supported app and try again.");return;
         }
         int generation=watchGeneration,requestedDuring=dialogueVersion;
+        var captureWindow=ReadWindow(GetForegroundWindow(),true);
+        if(captureWindow==null){if(question.Length>0)LocalReply("No eligible window is focused.");return;}
+        Track(captureWindow);int captureVersion=sceneVersion;
         sampling=true;watchLabel.Text="Screen on · checking";
         try{
-            // Copy the current primary display once; inference is serialized, on loopback.
-            var b=Forms.Screen.PrimaryScreen.Bounds;
+            NativeRect frame;
+            if(!GetWindowRect(captureWindow.Handle,out frame))throw new IOException();
+            var b=Drawing.Rectangle.Intersect(Forms.Screen.FromHandle(captureWindow.Handle).Bounds,
+                Drawing.Rectangle.FromLTRB(frame.left,frame.top,frame.right,frame.bottom));
+            if(b.Width<8 || b.Height<8)throw new IOException();
             DateTime captured=DateTime.Now;
             byte[] image=CaptureArea(new Rect(b.X,b.Y,b.Width,b.Height));
+            string digest;
+            using(var hash=System.Security.Cryptography.SHA256.Create())digest=Convert.ToBase64String(hash.ComputeHash(image));
+            if(question.Length==0 && observation.Length>0 && digest==previousImage){
+                watchLabel.Text="Watching "+captureWindow.App;return;
+            }
             string[] lines=await Task.Run(()=>AskVision(image,"screen",question));
             if(watchBadge==null || generation!=watchGeneration || quitting)return;
-            observation=System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lines[0]));
-            if(question.Length>0 && requestedDuring==dialogueVersion){LocalReply(observation);showingScreenReply=true;}
-            observedAt=captured;watchLabel.Text="Screen on · "+observedAt.ToString("HH:mm:ss");
+            if(!SameCapture(captureWindow,ReadWindow(GetForegroundWindow(),true),captureVersion,sceneVersion) || !CanObserveFocus()){
+                observation="";if(question.Length>0 && requestedDuring==dialogueVersion)LocalReply("The window changed during that check.");
+                return;
+            }
+            string description=System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lines[0]));
+            if(question.Length>0 && requestedDuring==dialogueVersion){LocalReply(description);showingScreenReply=true;}
+            if(question.Length==0){observation=description;previousImage=digest;observedAt=captured;}
+            watchLabel.Text="Watching "+captureWindow.App+" · "+captured.ToString("HH:mm:ss");
         }catch(Exception){
-            if(watchBadge!=null && generation==watchGeneration){observation="";watchLabel.Text="Screen on · model unavailable";if(question.Length>0 && requestedDuring==dialogueVersion)LocalReply("Screen check failed. Check the vision model in LM Studio.");}
+            if(watchBadge!=null && generation==watchGeneration && captureVersion==sceneVersion){observation="";watchLabel.Text=captureWindow.App+" · vision unavailable";if(question.Length>0 && requestedDuring==dialogueVersion)LocalReply("Screen check failed. Check the vision model in LM Studio.");}
         }finally{sampling=false;}
     }
     static byte[] CaptureArea(Rect area){
@@ -127,6 +156,14 @@ namespace MellowDesktop {
     }
     static string DesktopIntent(string message){
         string text=message.Trim().TrimEnd('?');
+        if(text.Equals("what am I doing",StringComparison.OrdinalIgnoreCase) || text.Equals("what am I working on",StringComparison.OrdinalIgnoreCase))return "/activity";
+        if(text.Equals("where was I",StringComparison.OrdinalIgnoreCase))return "/recent-apps";
+        if(text.Equals("take me back",StringComparison.OrdinalIgnoreCase))return "/back-to";
+        const string back="take me back to ";
+        if(text.StartsWith(back,StringComparison.OrdinalIgnoreCase))return "/back-to "+text.Substring(back.Length).Trim();
+        if(text.Equals("remember my setup",StringComparison.OrdinalIgnoreCase))return "/save-setup";
+        if(text.Equals("restore my setup",StringComparison.OrdinalIgnoreCase))return "/restore-setup";
+        if(text.Equals("skip this setup",StringComparison.OrdinalIgnoreCase))return "/skip-setup";
         if(text.Equals("start watching my screen",StringComparison.OrdinalIgnoreCase))return "/screen watch";
         if(text.Equals("stop watching my screen",StringComparison.OrdinalIgnoreCase))return "/screen stop";
         if(text.Equals("refresh this tab",StringComparison.OrdinalIgnoreCase))return "/browser refresh";
@@ -144,6 +181,14 @@ namespace MellowDesktop {
         message=DesktopIntent(message);
         string[] parts=message.Split(new[]{' '},2);
         string key=parts[0].ToLowerInvariant(),arg=parts.Length>1?parts[1].Trim():"";
+        if(key=="/activity" || key=="/recent-apps"){DescribeActivity(key=="/recent-apps");return true;}
+        if(key=="/back-to"){RewindTo(arg);return true;}
+        if(key=="/save-setup"){SavedSetup(true);return true;}
+        if(key=="/restore-setup"){
+            if(proposed!=null && DateTime.UtcNow<offerExpires)RestoreProposed();else SavedSetup(false);
+            return true;
+        }
+        if(key=="/skip-setup"){proposed=null;LocalReply("Okay, carry on.");return true;}
         if(key=="/screen" || message.TrimEnd('?').Equals("what's on my screen",StringComparison.OrdinalIgnoreCase)){
             if(key=="/screen" && arg.StartsWith("ask ",StringComparison.OrdinalIgnoreCase)){
                 string question=arg.Substring(4).Trim();
@@ -154,7 +199,7 @@ namespace MellowDesktop {
             }
             if(arg=="watch"){StartWatching();return true;}
             if(arg=="stop"){StopWatching();LocalReply("Screen observation stopped. The cached description was cleared.");return true;}
-            LocalReply(watchBadge==null?"Screen observation is off. Use /screen watch to sample your primary display locally every 12 seconds.":
+            LocalReply(watchBadge==null?"Screen observation is off. Use /screen watch to observe the active window locally.":
                 observation.Length>0?"Last screen check ("+observedAt.ToString("HH:mm:ss")+"): "+observation:
                 watchLabel.Text+". No description yet.");showingScreenReply=watchBadge!=null;return true;
         }
@@ -176,7 +221,7 @@ namespace MellowDesktop {
             }
             if(key=="/point"){Later(PointAtControl);return true;}
             if(key=="/close-window"){Later(delegate{SelectWindow(true);});return true;}
-            if(key=="/desktop"){LocalReply("/screen watch · /screen · /screen ask QUESTION · /screen stop\n/open https://example.com\n/search terms\n/browser back, forward or refresh\n/open notepad or calculator\n/point · /close-window");return true;}
+            if(key=="/desktop"){LocalReply("What am I doing? · Where was I? · Take me back\nRemember my setup · Restore my setup\n/screen watch · /screen · /screen ask QUESTION · /screen stop\n/open https://example.com\n/search terms\n/browser back, forward or refresh\n/open notepad or calculator\n/point · /close-window");return true;}
         }catch(Exception){LocalReply("Windows could not complete that action.");return true;}
         return false;
     }

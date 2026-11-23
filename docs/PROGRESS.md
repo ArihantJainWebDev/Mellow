@@ -2,6 +2,12 @@
 
 Updated November 23, 2026 (Asia/Kolkata).
 
+## Desktop awareness and workspace recall
+
+The opt-in watcher tracks foreground window changes and distinguishes background app presence. Title and foreground identity guard asynchronous vision results. The local trail supports recent-window recall and returning to an exact match. An observed repeat can produce a workspace offer. An explicitly saved workspace survives restarts, appears in export and is removed by reset. [Hands-on flow and limits](DESKTOP_WORKFLOW.md).
+
+The automated checks use a native fixture window, a synthetic three-window sequence, separate local storage processes and a generated vision card. Whether suggestions feel timely and whether individual apps permit foreground restoration still require hands-on use. This milestone stores saved app/title pairs; screenshot history, arbitrary tab reconstruction and automatic music playback remain planned.
+
 ## Desktop usefulness milestone
 
 - Windows composer and paged reply cloud implemented. Offscreen WPF verification measured eleven pages of multilingual fixture text and checked speaking and waiting states.

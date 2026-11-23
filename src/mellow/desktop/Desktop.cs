@@ -121,7 +121,7 @@ namespace MellowDesktop {
             visionMenu.DropDownItems.Add("Compare visible products",null,delegate {InspectRegion("compare");});
             visionMenu.DropDownItems.Add("Show unfinished checklist item",null,delegate {InspectRegion("checkpoint");});
             menu.Items.Add(visionMenu);
-            menu.Items.Add("Watch primary screen locally",null,delegate{StartWatching();});
+            menu.Items.Add("Watch active window locally",null,delegate{StartWatching();});
             menu.Items.Add("Stop screen observation",null,delegate{StopWatching();});
             menu.Items.Add("Open project checkpoint…",null,delegate {OpenCheckpoint();});
             menu.Items.Add("Perch on a window",null,delegate {Later(delegate {SelectWindow(false);});});
@@ -148,7 +148,10 @@ namespace MellowDesktop {
             menu.Items.Add("Climb to the top edge",null,delegate {
                 RequestEdgeClimb();
             });
-            window.Loaded+=delegate {if(!verify) Signal("offer","Click to chat. Right-click for controls.",7);};
+            window.Loaded+=delegate {if(!verify){
+                Signal("offer","Click to chat. Right-click for controls.",7);
+                if(Pref("DesktopAwareness",0)==1)StartWatching();
+            }};
             foreach(int n in new int[]{82,116,156}) {
                 int pixels=n;
                 menu.Items.Add("Size "+pixels,null,delegate {var oldFloor=Bounds().Bottom;
@@ -237,10 +240,19 @@ namespace MellowDesktop {
         void ShowGhostMenu(){
             var popup=new ContextMenu{PlacementTarget=view,Placement=System.Windows.Controls.Primitives.PlacementMode.MousePoint,
                 StaysOpen=false,MaxHeight=SystemParameters.WorkArea.Height-12};
+            var more=new MenuItem{Header="More controls"};
             foreach(Forms.ToolStripItem node in menu.Items){
                 var action=node as Forms.ToolStripMenuItem;
-                if(action!=null)popup.Items.Add(GhostMenuItem(action));
+                if(action==null)continue;
+                if(action.Text=="Chat with Mellow" || action.Text=="Exit Mellow")continue;
+                if(action.Text=="Watch active window locally" || action.Text=="Stop screen observation")continue;
+                more.Items.Add(GhostMenuItem(action));
             }
+            var chat=new MenuItem{Header="Chat with Mellow"};chat.Click+=delegate{OpenChat();};popup.Items.Add(chat);
+            var awareness=new MenuItem{Header=watchBadge==null?"Enable desktop awareness":"Pause desktop awareness"};
+            awareness.Click+=delegate{if(watchBadge==null)StartWatching();else StopWatching();};popup.Items.Add(awareness);
+            popup.Items.Add(more);
+            var exit=new MenuItem{Header="Exit Mellow"};exit.Click+=delegate{window.Close();};popup.Items.Add(exit);
             popup.Items.Add(new Separator());
             popup.Items.Add(new MenuItem{Header="Dismiss menu"});
             popup.IsOpen=true;
@@ -269,7 +281,13 @@ namespace MellowDesktop {
         void OpenChat() {
             if(!window.IsVisible) window.Show();
             if(chatWindow==null)CreateComposer();
-            if(!chatWindow.IsActive)previousApp=GetForegroundWindow();
+            if(!chatWindow.IsActive){
+                previousApp=GetForegroundWindow();
+                if(watchBadge!=null){
+                    var last=CanObserveFocus()?ReadWindow(previousApp,true):null;
+                    if(last!=null)Track(last);else InvalidateScene();
+                }
+            }
             var area=SystemParameters.WorkArea;
             chatWindow.Width=Math.Min(620,area.Width-24);
             chatWindow.Left=area.Left+(area.Width-chatWindow.Width)/2;
@@ -284,7 +302,7 @@ namespace MellowDesktop {
             if(intent.StartsWith("/browser ",StringComparison.OrdinalIgnoreCase) ||
                intent.StartsWith("/screen watch",StringComparison.OrdinalIgnoreCase) ||
                intent.StartsWith("/screen ask ",StringComparison.OrdinalIgnoreCase) ||
-               intent=="/point" || intent=="/close-window")HideComposer();
+               intent.StartsWith("/back-to",StringComparison.OrdinalIgnoreCase) || intent=="/restore-setup" || intent=="/point" || intent=="/close-window")HideComposer();
             ResetReply();
             if(WorkspaceCommand(msg))return;
             commandOutput.Clear();submitted=true;streamed=false;ready=false;input.IsEnabled=false;

@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from mellow.memory_policy import statement, words
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -105,7 +105,11 @@ class History:
                 db.execute("""CREATE TABLE IF NOT EXISTS assignment_notices (
                     fingerprint TEXT PRIMARY KEY, task_id INTEGER NOT NULL
                     REFERENCES assignments(id) ON DELETE CASCADE)""")
-                db.execute("PRAGMA user_version = 7")
+                version = 7
+            if version == 7:
+                db.execute("""CREATE TABLE IF NOT EXISTS workspace_windows (
+                    position INTEGER PRIMARY KEY, app TEXT NOT NULL, title TEXT NOT NULL)""")
+                db.execute("PRAGMA user_version = 8")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -163,10 +167,11 @@ class History:
             db.execute("DELETE FROM turns")
             db.execute("DELETE FROM sessions")
             db.execute("DELETE FROM assignments")
+            db.execute("DELETE FROM workspace_windows")
 
     def export(self, path: Path) -> None:
         tables = ("sessions", "turns", "active_chat", "memory_candidates", "memory_jobs",
-                  "automatic_memories", "hidden_turns", "assignments", "assignment_notices")
+                  "automatic_memories", "hidden_turns", "assignments", "assignment_notices", "workspace_windows")
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             db.row_factory = sqlite3.Row

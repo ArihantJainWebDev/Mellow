@@ -128,11 +128,17 @@ namespace MellowDesktop {
             double attentionAge=now-attentionStarted;
             double nod=attending && attentionAge<.6?3*Math.Sin(Math.PI*attentionAge/.6):0;
             double targetLean=state=="listen"?-8:state=="think"?10:ClimbingFrame?wallDirection*weight*9:climb?weight*9:nod;
+            bool watching=watchBadge!=null && state=="idle" && !guiding && !ClimbingFrame && weight<.08;
+            eyeAim+=((watching?aim:0)-eyeAim)*(1-Math.Exp(-dt*10));
+            eyeAimY+=((watching?aimY:0)-eyeAimY)*(1-Math.Exp(-dt*9));
+            headAim+=(eyeAim-headAim)*(1-Math.Exp(-dt*2));
+            targetLean+=headAim*4;
             UpdateGrips(now,dt);
             targetLean=targetLean*(1-gripWeight)+gripWeight*(gripWall*7*(1-overhead)+overhead*(4*Math.Sin(now*3.2)+3*stride+looseArm*gripWall*12));
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
             double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):ClimbingFrame?wallDirection*52:direction*(onFoot?55*Math.Min(1,weight*4):42*weight);
+            targetYaw+=headAim*19;
             targetYaw=targetYaw*(1-gripWeight)+gripWeight*gripWall*((clothGhost==null?27:51)*(1-overhead)+6*overhead);
             double pivot=targetYaw-yaw;
             yaw+=pivot*blend;
@@ -176,7 +182,7 @@ namespace MellowDesktop {
             double blink=Math.Max(.09,Math.Min(1,Math.Abs(now%4.7-3.9)*8));
             var gaze=new Transform3DGroup();
             gaze.Children.Add(new ScaleTransform3D(1,state=="rest"?.15:blink,1,0,.59,0));
-            gaze.Children.Add(new TranslateTransform3D(direction*.022*weight,0,0));
+            gaze.Children.Add(new TranslateTransform3D(direction*.022*weight+eyeAim*.03,eyeAimY*.02,0));
             eyes.Transform=gaze;
             if(clothGhost!=null){
                 privacyCover+=((state=="privacy" && yaw>110?1:0)-privacyCover)*blend;
@@ -184,10 +190,10 @@ namespace MellowDesktop {
                 if(gripWeight<.001 && elapsed>=0 && elapsed<15) clothGhost.Animate(elapsed);
                 else {
                     pointBlend+=((state=="point"?(pointingLeft?-1:1):0)-pointBlend)*blend;
-                    double look=state=="point"?(pointingLeft?-1:1):direction*weight;
+                    double look=state=="point"?(pointingLeft?-1:1):Clamp(direction*weight+eyeAim,-1,1);
                     clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover,onFoot,gripWeight,
                         state=="speak"?mouthOpen:0,look*(1-gripWeight)+gripWall*gripWeight,
-                        gripWeight+ (state=="think"?.55:0),spring,now,dt,pointBlend);
+                        gripWeight+ (state=="think"?.55:eyeAimY*(1-gripWeight)),spring,now,dt,pointBlend);
                 }
             }
             RenderGrips(now);

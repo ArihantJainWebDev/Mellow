@@ -4,9 +4,9 @@ Launch `python -m mellow.avatar` from the project folder. Exit an older avatar t
 
 ## Talk and read
 
-Click Mellow or press **Ctrl+Alt+M**. The translucent composer appears at the top center of the primary work area and takes ordinary Windows keyboard focus. **Enter** sends, **Shift+Enter** inserts a newline and **Esc** hides the composer. On send or dismissal Mellow asks Windows to restore the previously focused app. The chat worker is shared with the CLI.
+Click Mellow or press **Ctrl+Alt+M**. The translucent composer appears at the top center of the primary work area and takes ordinary Windows keyboard focus. **Enter** sends, **Shift+Enter** inserts a newline and **Esc** hides the composer. The composer stays open during ordinary chat. Dismissing it returns focus to the previous app. The chat worker is shared with the CLI.
 
-The cloud tracks the ghost and stays inside the primary work area. It measures pages with the actual WPF font and wrap width. Incoming text is revealed progressively. **Reveal** finishes the current page, Pages advance after a reading pause. **Next** and **Back** show the destination page immediately. Bold, italic and inline code use styled text. Speaking gestures settle while a completed page waits. **Copy** copies the reply received so far. **Close** dismisses the cloud, including later chunks from the same answer. Sending a new message replaces the cloud.
+The cloud tracks the ghost and stays inside the primary work area. It measures pages with the actual WPF font and wrap width. Incoming text is revealed progressively. **Reveal** finishes the current page. Pages advance after a reading pause. **Next** and **Back** show the destination page immediately. Bold, italic and inline code use styled text. Speaking gestures settle while a completed page waits. **Copy** copies the reply received so far. **Close** dismisses the cloud, including later chunks from the same answer. Sending a new message replaces the cloud.
 
 ## Track assignments
 
@@ -37,7 +37,7 @@ Start a vision-capable model in LM Studio and enable its local server on port 12
 
 | In the composer | Effect |
 | --- | --- |
-| `/screen watch` | Shows a persistent Stop badge and starts sampling the primary display. One local model request can run at a time, on a 12-second timer. |
+| `/screen watch` | Shows the Recent/Stop badge. Window changes are checked every second. After a window settles, its visible screen area can be sampled locally; subsequent checks run at roughly 12-second intervals, with one inference at a time. |
 | `/screen` | Shows the latest description and its capture time or the current availability. |
 | `/screen ask What error is visible?` | Requests a fresh local image answer while observation is on. |
 | `/screen stop` | Stops new captures and clears the cached description. Late results are discarded. The badge also has a Stop button. |
@@ -49,7 +49,18 @@ Start a vision-capable model in LM Studio and enable its local server on port 12
 
 You can also type “Start watching my screen”, “Look at my screen: which error is visible?”, “Stop watching my screen”, “Open calculator”, “Search the web for compiler docs”, “Go back in my browser”, or “Refresh this tab”.
 
-Screen observation starts off on every launch. The focus check pauses new captures for the composer and password fields or unknown focus reported by Windows accessibility. It cannot identify sensitive content elsewhere on the screen. Use **Stop** before opening confidential material. Locking the Windows session stops the watcher. Raw images travel in memory to the local model. Screen descriptions stay out of Groq chat, SQLite, and exports. The screen result cannot trigger actions. Navigation, searches and app launches require an explicit command. The browser and LM Studio have their own settings and histories.
+Awareness starts off on first use. After enabling it once, it resumes on ordinary relaunch. Stop persists across restarts and clears the temporary activity trail. The focus check pauses new captures for the composer and password fields or unknown focus reported by Windows accessibility. It cannot identify sensitive content elsewhere on the screen. Use **Stop** before opening confidential material. Locking the Windows session stops the watcher. Raw images travel in memory to the local model. Screen descriptions stay out of Groq chat, SQLite, and exports. The screen result cannot trigger actions. Navigation, searches and app launches require an explicit command. The browser and LM Studio have their own settings and histories.
+
+## A project workspace that remembers its windows
+
+Right-click the ghost and choose **Enable desktop awareness** once. While idle, Mellow glances toward the active window or a recently moved pointer inside it. The **Recent** badge button shows the last five observed windows. The local trail contains at most 48 transitions and is cleared on Stop or exit.
+
+1. Spend a couple of seconds in each of three ordinary windows, for example Opera, VS Code and a chat. Press Ctrl+Alt+M over the last one and ask **What am I doing?** The foreground caption and other open apps are labeled separately. Local vision adds a dated description when available.
+2. Say **remember my setup**. This explicitly saves up to three recently visited, still-open windows by application and title. Exact titles are personal data in the local SQLite export. A new save replaces the previous one; database reset removes it.
+3. Exit and restart Mellow from the same folder. Minimize one of those windows, then say **restore my setup**. Review the list and choose **Restore setup** or **Skip**. Only uniquely matching live windows are eligible. Closed windows, changed tab titles and ambiguous matches are reported. This version does not relaunch missing apps or reconstruct URLs.
+4. For an untrained example, visit windows A, B, C, A, B, C, A with stable titles, dwelling long enough to be observed. While Mellow is idle he can offer that setup. If a reply is already on screen, the badge shows **Workspace?** so you can inspect the offer without interrupting it. No window moves until you confirm. This narrow recognition rule operates within the current observation session.
+
+**Take me back** returns to the preceding eligible window. **Take me back to VS Code** selects the most recent matching editor window. Mellow rechecks its identity before asking Windows to focus it. **Where was I?** brings back the recent trail without sending titles to Groq. A minimized app can appear under other open apps; its presence alone does not establish that it was used. Available titles and password-field detection depend on Windows accessibility. Use Stop when a window must be excluded.
 
 ## Repeat the checks
 
