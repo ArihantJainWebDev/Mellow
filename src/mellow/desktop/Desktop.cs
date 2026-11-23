@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using Ellipse = System.Windows.Shapes.Ellipse;
+using System.Windows.Media.Animation;
+using Polygon = System.Windows.Shapes.Polygon;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,7 +29,9 @@ namespace MellowDesktop {
         Process backend;
         Border bubble;
         StackPanel bubbleStack;
-        TextBlock bubbleText, tail;
+        TextBlock bubbleText;
+        Grid bubbleTail;
+        FrameworkElement speechTip,thoughtDots;
         Canvas cloud;
         Grid bubbleFace;
         bool dragConsumed, passThrough;
@@ -62,12 +66,20 @@ namespace MellowDesktop {
             }
             window.Content=null;
             var grid=new Grid(); grid.Children.Add(view);
-            bubbleText=new TextBlock{TextWrapping=TextWrapping.Wrap,MaxHeight=53,
-                FontSize=13,Foreground=Brushes.Indigo,TextTrimming=TextTrimming.CharacterEllipsis};
-            bubble=new Border{Background=Brushes.Lavender,Padding=new Thickness(12,6,12,6),Child=bubbleText};
-            tail=new TextBlock{Foreground=Brushes.MediumPurple,Margin=new Thickness(12,-3,0,0)};
+            bubbleText=new TextBlock{TextWrapping=TextWrapping.Wrap,MaxHeight=51,LineHeight=17,
+                FontFamily=new FontFamily("Segoe UI"),FontSize=13,Foreground=Brushes.MidnightBlue,
+                TextTrimming=TextTrimming.CharacterEllipsis};
+            var pearl=new SolidColorBrush(Color.FromRgb(250,244,252));
+            bubble=new Border{Background=pearl,Padding=new Thickness(13,7,13,7),Child=bubbleText};
+            bubbleTail=new Grid{Height=10,Width=23,HorizontalAlignment=HorizontalAlignment.Center};
+            speechTip=new Polygon{Fill=pearl,Points=new PointCollection{new Point(2,0),new Point(16,0),new Point(14,8)}};
+            var dots=new Canvas();
+            var big=new Ellipse{Fill=pearl,Width=7,Height=5};dots.Children.Add(big);
+            var little=new Ellipse{Fill=pearl,Width=4,Height=3};Canvas.SetTop(little,6);Canvas.SetLeft(little,8);dots.Children.Add(little);
+            thoughtDots=dots;bubbleTail.Children.Add(speechTip);bubbleTail.Children.Add(dots);
             bubbleStack=new StackPanel{VerticalAlignment=VerticalAlignment.Bottom,MaxWidth=178,
-                IsHitTestVisible=false,Visibility=Visibility.Collapsed};
+                IsHitTestVisible=false,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,0,0,size*.87),Visibility=Visibility.Collapsed};
+            bubbleStack.Effect=new System.Windows.Media.Effects.DropShadowEffect{Color=Color.FromRgb(46,31,58),BlurRadius=6,ShadowDepth=1.5,Opacity=.30};
             bubbleFace=new Grid();
             cloud=new Canvas{IsHitTestVisible=false};
             bubbleFace.Children.Add(cloud);bubbleFace.Children.Add(bubble);
@@ -76,12 +88,12 @@ namespace MellowDesktop {
                 cloud.Children.Clear();
                 for(int i=0;i<5;i++){
                     double diameter=Math.Min(26,width/4);
-                    var puff=new Ellipse{Width=diameter,Height=diameter,Fill=Brushes.Thistle};
+                    var puff=new Ellipse{Width=diameter,Height=diameter,Fill=pearl};
                     Canvas.SetLeft(puff,4+(width-diameter-8)*i/4);
                     Canvas.SetTop(puff,-3-(i%2)*3);cloud.Children.Add(puff);
                 }
             };
-            bubbleStack.Children.Add(bubbleFace); bubbleStack.Children.Add(tail);
+            bubbleStack.Children.Add(bubbleFace); bubbleStack.Children.Add(bubbleTail);
             grid.Children.Add(bubbleStack); window.Content=grid; LayoutAvatar();
             view.Cursor=System.Windows.Input.Cursors.Hand;
             window.MouseRightButtonUp+=delegate(object sender,System.Windows.Input.MouseButtonEventArgs e) {
@@ -103,7 +115,7 @@ namespace MellowDesktop {
                 placed=false;guiding=false;pathStage=0;travel=0; offset=bounds.Right-window.Left; lift=Math.Max(0,bounds.Bottom-window.Top);
                 moving=false; SetPassive(passThrough); SavePosition();
             };
-            if(verify && verifyChat!="1") return;
+            if(offscreenReview || (verify && verifyChat!="1")) return;
             menu=new Forms.ContextMenuStrip();
             if(clothGhost!=null) menu.Items.Add("Perform hat trick",null,delegate {trickStart=time.Elapsed.TotalSeconds;Signal("perform","",15);});
             var visionMenu=new Forms.ToolStripMenuItem("Inspect selected region locally");
@@ -223,12 +235,14 @@ namespace MellowDesktop {
             bubbleText.Text=text;
             bool speaking=next=="speak"||next=="offer";
             cloud.Visibility=speaking?Visibility.Collapsed:Visibility.Visible;
-            tail.Text=speaking?"▾":"● ·";
-            bubble.CornerRadius=new CornerRadius(speaking?9:20);
-            bubble.Background=speaking?Brushes.Lavender:Brushes.Thistle;
-            bubble.Effect=new System.Windows.Media.Effects.DropShadowEffect{BlurRadius=4,ShadowDepth=1,Opacity=.24};
-            bubbleStack.Margin=new Thickness(0,0,0,size*.86);
-            bubbleStack.Visibility=quiet||text.Length==0?Visibility.Collapsed:Visibility.Visible;
+            speechTip.Visibility=speaking?Visibility.Visible:Visibility.Collapsed;
+            thoughtDots.Visibility=speaking?Visibility.Collapsed:Visibility.Visible;
+            bubble.CornerRadius=new CornerRadius(speaking?12:19);
+            bubbleStack.Margin=new Thickness(0,0,0,size*.87);
+            bool show=!quiet && text.Length>0;
+            if(show && bubbleStack.Visibility!=Visibility.Visible)
+                bubbleStack.BeginAnimation(UIElement.OpacityProperty,new DoubleAnimation(0,1,TimeSpan.FromMilliseconds(120)){FillBehavior=FillBehavior.Stop});
+            bubbleStack.Visibility=show?Visibility.Visible:Visibility.Collapsed;
         }
         void OpenChat() {
             if(!window.IsVisible) window.Show();

@@ -20,7 +20,7 @@ namespace MellowDesktop {
         readonly Window window;
         readonly Stopwatch time = new Stopwatch();
         readonly DispatcherTimer timer = new DispatcherTimer();
-        readonly bool verify;
+        readonly bool verify,offscreenReview;
         readonly string preview;
         IntPtr foreground;
         int frames;
@@ -70,9 +70,10 @@ namespace MellowDesktop {
             return .5+lowest/camera.Width;
         }
         readonly HatTheatre clothGhost;
-        double privacyCover;
+        double privacyCover,pointBlend;
         double trickStart=double.NegativeInfinity;
-        public Ghost(bool verify,string preview,bool classic) {
+        public Ghost(bool verify,string preview,bool classic,bool offscreenReview=false) {
+            this.offscreenReview=offscreenReview;
             this.verify=verify;
             this.preview=preview;
             parts.Children.Add(body);
@@ -131,7 +132,7 @@ namespace MellowDesktop {
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
             double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):ClimbingFrame?wallDirection*52:direction*(onFoot?55*Math.Min(1,weight*4):42*weight);
-            targetYaw=targetYaw*(1-gripWeight)+gripWeight*gripWall*(27-21*overhead);
+            targetYaw=targetYaw*(1-gripWeight)+gripWeight*gripWall*((clothGhost==null?27:51)*(1-overhead)+6*overhead);
             double pivot=targetYaw-yaw;
             yaw+=pivot*blend;
             if(state=="privacy" || Math.Abs(pivot)>70) stride+=Math.Sin(yaw*Math.PI/36)*Math.Min(1,Math.Abs(pivot)/35);
@@ -180,7 +181,13 @@ namespace MellowDesktop {
                 privacyCover+=((state=="privacy" && yaw>110?1:0)-privacyCover)*blend;
                 double elapsed=time.Elapsed.TotalSeconds-trickStart;
                 if(gripWeight<.001 && elapsed>=0 && elapsed<15) clothGhost.Animate(elapsed);
-                else clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover,onFoot,gripWeight);
+                else {
+                    pointBlend+=((state=="point"?(pointingLeft?-1:1):0)-pointBlend)*blend;
+                    double look=state=="point"?(pointingLeft?-1:1):direction*weight;
+                    clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover,onFoot,gripWeight,
+                        state=="speak"?mouthOpen:0,look*(1-gripWeight)+gripWall*gripWeight,
+                        gripWeight+ (state=="think"?.55:0),spring,now,dt,pointBlend);
+                }
             }
             RenderGrips(now);
             if(onFoot && !moving && state!="privacy" && time.Elapsed.TotalSeconds-trickStart>=15)

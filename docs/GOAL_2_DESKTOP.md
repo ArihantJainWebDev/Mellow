@@ -33,6 +33,17 @@ Right-click **Walk along the floor** to replay a short walk. On level travel eac
 
 The Windows renderer check exercises left and right climbs at 82, 116 and 156 display units. It temporarily colors each mitten separately to measure visible contact on the real overlay, checks whether a planted grip slides and follows the route through landing. To reproduce from the project root, run `powershell -NoProfile -STA -ExecutionPolicy Bypass -File src/mellow/desktop/avatar.ps1 -Verify`. The optional `-Preview PATH-climb.gif` records the sequence. The check briefly displays the avatar and disposable test windows.
 
+### Offscreen visual review
+
+[Desktop poses and captions](visuals/cloth-poses.png) are rendered from the same camera and model as the overlay. The hat ghost's two sleeves share their shoulder boundary positions with the animated sheet. The sleeves taper into the hands in the same mesh during everyday gestures, prop handling and climbing. Speech animates the smile, gaze follows the selected gesture, and the open umbrella pivots around the hand on its shaft.
+
+Run these checks from the project directory. Both write to the supplied preview path without opening a desktop avatar. The pose sheet checks shoulder seams, finite mesh positions, prop contact and caption layout at the supported model sizes. The climb recording checks contact throughout both directions of travel. The interactive verification above also covers real Windows focus and window behavior.
+
+```powershell
+powershell -NoProfile -STA -ExecutionPolicy Bypass -File src/mellow/desktop/avatar.ps1 -PoseSheet -Preview poses.png
+powershell -NoProfile -STA -ExecutionPolicy Bypass -File src/mellow/desktop/avatar.ps1 -Offscreen -Preview sample-climb.gif
+```
+
 ## Desktop signals and one-shot vision
 
 The desktop reads primary-display taskbar and selected window rectangles. Right-click **Perch on a window**, then hover over a restored application with room above its title bar. Mellow approaches a side from the floor, reaches the lower frame, climbs the side, pulls across the corner and walks along the title bar. He follows a moved ledge. Closing, minimizing or covering the support, switching to another application window, or choosing **Leave ledge** starts a descent to the current floor. Typing or hovering during this recovery still lets him land. Revealing the bottom taskbar while the ghost stands there triggers a spring reaction. A local familiarity counter softens later encounters. Top-edge travel can lead to a hang and an umbrella descent. The accessibility guide refreshes a supported button or hyperlink's bounds while pointing. Hiding the control releases the target.

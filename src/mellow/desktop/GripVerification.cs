@@ -7,17 +7,30 @@ using System.Windows.Media.Media3D;
 
 namespace MellowDesktop {
  public sealed partial class Ghost {
+    RenderTargetBitmap scratchFrame;
     RenderTargetBitmap GripFrame(){
+        var content=offscreenHost??(FrameworkElement)window.Content;
+        if(offscreenHost!=null){
+            var viewport=(FrameworkElement)offscreenHost.Children[0];
+            viewport.Width=size;viewport.Height=size;
+            content.Measure(new Size(window.Width,window.Height));
+            content.Arrange(new Rect(0,0,window.Width,window.Height));content.UpdateLayout();
+        }
+        int w=(int)content.ActualWidth,h=(int)content.ActualHeight;
+        if(scratchFrame==null || scratchFrame.PixelWidth!=w || scratchFrame.PixelHeight!=h)
+            scratchFrame=new RenderTargetBitmap(w,h,96,96,PixelFormats.Pbgra32);
+        else scratchFrame.Clear();
+        scratchFrame.Render(content);return scratchFrame;
+    }
+    Point GripFrameOrigin(){
+        if(offscreenHost!=null)return new Point(window.Left,window.Top);
         var content=(FrameworkElement)window.Content;
-        var image=new RenderTargetBitmap((int)content.ActualWidth,(int)content.ActualHeight,96,96,PixelFormats.Pbgra32);
-        image.Render(content);return image;
+        return PresentationSource.FromVisual(content).CompositionTarget.TransformFromDevice.Transform(content.PointToScreen(new Point()));
     }
     // Identify each sleeve in the real composited render, including occlusion,
     // viewport clipping, window padding and the host's screen coordinate transform.
     double PaintedGripGap(double boundary,bool ceiling,int hand,byte[] pixels,int width,int height) {
-        var content=(FrameworkElement)window.Content;
-        var toDip=PresentationSource.FromVisual(content).CompositionTarget.TransformFromDevice;
-        Point originOnScreen=toDip.Transform(content.PointToScreen(new Point()));
+        Point originOnScreen=GripFrameOrigin();
         Point expected=ViewOrigin()+ (Vector)palms[hand];
         double gap=double.PositiveInfinity;
         for(int y=0;y<height;y++)for(int x=0;x<width;x++){
@@ -31,7 +44,7 @@ namespace MellowDesktop {
         }
         return gap;
     }
-    RenderTargetBitmap MarkedGripFrame() {
+    RenderTargetBitmap MarkedGripFrame(Func<RenderTargetBitmap> render=null) {
         var pieces=new GeometryModel3D[6];
         var colors=new Material[6];
         try {
@@ -39,13 +52,13 @@ namespace MellowDesktop {
                 Brush color=i==0?Brushes.Lime:Brushes.Red;
                 var marker=new MaterialGroup();
                 marker.Children.Add(new DiffuseMaterial(color));marker.Children.Add(new EmissiveMaterial(color));
-                for(int j=0;j<3;j++){
+                for(int j=0;j<(clothGhost==null?3:1);j++){
                     int k=3*i+j;
-                    var piece=(GeometryModel3D)(j==0?gripRig.Children[i]:mitts[i].Children[j-1]);
+                    var piece=clothGhost!=null?clothGhost.SleeveModels[i]:(GeometryModel3D)(j==0?gripRig.Children[i]:mitts[i].Children[j-1]);
                     pieces[k]=piece;colors[k]=piece.Material;piece.Material=piece.BackMaterial=marker;
                 }
             }
-            return GripFrame();
+            return render==null?GripFrame():render();
         } finally {
             for(int k=0;k<pieces.Length;k++)if(pieces[k]!=null)pieces[k].Material=pieces[k].BackMaterial=colors[k];
         }
@@ -64,9 +77,7 @@ namespace MellowDesktop {
     }
     void AddClimbFrame(GifBitmapEncoder gif){
         var image=GripFrame();int width=368,height=224;
-        var content=(FrameworkElement)window.Content;
-        var transform=PresentationSource.FromVisual(content).CompositionTarget.TransformFromDevice;
-        Point at=transform.Transform(content.PointToScreen(new Point()));
+        Point at=GripFrameOrigin();
         var visual=new DrawingVisual();
         using(var dc=visual.RenderOpen()){
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(25,29,39)),null,new Rect(0,0,width,height));

@@ -131,6 +131,7 @@ namespace MellowDesktop {
     }
 
     void CreateGripRig(Model3DGroup scene){
+        if(clothGhost!=null)return;
         var silk=new DiffuseMaterial(new SolidColorBrush(Color.FromRgb(235,215,237)));
         for(int hand=0;hand<2;hand++){
             var mesh=new MeshGeometry3D();sleeves[hand]=mesh;
@@ -163,38 +164,46 @@ namespace MellowDesktop {
         for(int i=0;i<2;i++){
             double side=i*2-1;
             Point3D root=torso.Transform(new Point3D(side*.49,.45,.17));
-            double z=side==gripWall?.84:.76;
+            double z=clothGhost==null?(side==gripWall?.84:.76):(side==gripWall?.67:.32);
             double x=(palms[i].X-size*.5)*units;
             double y=(axis+(.5*size-palms[i].Y)*units-up.Z*z)/up.Y;
-            Point3D tucked=torso.Transform(new Point3D(side*.73,.06,.21));
-            Point3D tip=tucked+(new Point3D(x,y,z)-tucked)*gripWeight;
-            double rim=rimBlend[i];
-            double fold=gripWeight;
-            Point3D wrist=tip+new Vector3D(-gripWall*.035*(1-rim),-.025,.03)*fold;
-            Point3D elbow=root+(wrist-root)*.44+new Vector3D(side*(.22+.33*rim),-.31,.12);
-            var paw=new Transform3DGroup();
-            paw.Children.Add(new ScaleTransform3D(fold,fold,fold));
-            paw.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),gripWall*78*(1-rim))));
-            paw.Children.Add(new TranslateTransform3D(tip.X-gripWall*.036*(1-rim),tip.Y-.032*rim,tip.Z+.025));
-            mitts[i].Transform=paw;
-            var points=new Point3DCollection((sleeveRows+1)*sleeveSides);
-            for(int row=0;row<=sleeveRows;row++){
-                double t=(double)row/sleeveRows;
-                var first=root+(elbow-root)*t;var second=elbow+(wrist-elbow)*t;
-                Point3D centre=first+(second-first)*t;
-                var tangent=second-first;tangent.Normalize();
-                var normal=Vector3D.CrossProduct(tangent,new Vector3D(0,0,1));normal.Normalize();
-                var depth=Vector3D.CrossProduct(normal,tangent);
-                // A continuous tapered sleeve swells into a soft mitten at the grip.
-                double radius=(.145-.06*t+.023*Math.Exp(-Math.Pow((t-.82)/.15,2)))*
-                    Math.Min(1,Math.Sqrt(Math.Max(0,1-t)*10))*gripWeight;
-                for(int j=0;j<sleeveSides;j++){
-                    double a=j*2*Pi/sleeveSides;
-                    points.Add(centre+normal*(radius*Math.Cos(a))+depth*(radius*Math.Sin(a)));
+            if(clothGhost!=null){
+                // Contacts live in screen space. Undo every animated parent, including cloth bob.
+                var actorToWorld=clothGhost.Model.Transform.Value;actorToWorld.Append(torso);actorToWorld.Invert();
+                // Curl the pad over the boundary so its rounded end bears on the lip.
+                var contact=new Point3D(x+1.6*units*gripWall*(1-rimBlend[i]),y+1.6*units*rimBlend[i]/up.Y,z);
+                clothGhost.BendSleeve(i,actorToWorld.Transform(contact),gripWeight,rimBlend[i]);
+            } else {
+                Point3D tucked=torso.Transform(new Point3D(side*.73,.06,.21));
+                Point3D tip=tucked+(new Point3D(x,y,z)-tucked)*gripWeight;
+                double rim=rimBlend[i];
+                double fold=gripWeight;
+                Point3D wrist=tip+new Vector3D(-gripWall*.035*(1-rim),-.025,.03)*fold;
+                Point3D elbow=root+(wrist-root)*.44+new Vector3D(side*(.22+.33*rim),-.31,.12);
+                var paw=new Transform3DGroup();
+                paw.Children.Add(new ScaleTransform3D(fold,fold,fold));
+                paw.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,0,1),gripWall*78*(1-rim))));
+                paw.Children.Add(new TranslateTransform3D(tip.X-gripWall*.036*(1-rim),tip.Y-.032*rim,tip.Z+.025));
+                mitts[i].Transform=paw;
+                var points=new Point3DCollection((sleeveRows+1)*sleeveSides);
+                for(int row=0;row<=sleeveRows;row++){
+                    double t=(double)row/sleeveRows;
+                    var first=root+(elbow-root)*t;var second=elbow+(wrist-elbow)*t;
+                    Point3D centre=first+(second-first)*t;
+                    var tangent=second-first;tangent.Normalize();
+                    var normal=Vector3D.CrossProduct(tangent,new Vector3D(0,0,1));normal.Normalize();
+                    var depth=Vector3D.CrossProduct(normal,tangent);
+                    // A continuous tapered sleeve swells into a soft mitten at the grip.
+                    double radius=(.145-.06*t+.023*Math.Exp(-Math.Pow((t-.82)/.15,2)))*
+                        Math.Min(1,Math.Sqrt(Math.Max(0,1-t)*10))*gripWeight;
+                    for(int j=0;j<sleeveSides;j++){
+                        double a=j*2*Pi/sleeveSides;
+                        points.Add(centre+normal*(radius*Math.Cos(a))+depth*(radius*Math.Sin(a)));
+                    }
                 }
+                sleeves[i].Positions=points;
+                arms[i].Transform=new ScaleTransform3D(1-gripWeight,1-gripWeight,1-gripWeight,side*.55,.32,0);
             }
-            sleeves[i].Positions=points;
-            if(clothGhost==null)arms[i].Transform=new ScaleTransform3D(1-gripWeight,1-gripWeight,1-gripWeight,side*.55,.32,0);
             var shoes=clothGhost==null?feet:clothGhost.Feet;
             double swing=Math.Sin(now*3.2-.65*i)*overhead;
             var legs=new Transform3DGroup();legs.Children.Add(shoes[i].Transform);

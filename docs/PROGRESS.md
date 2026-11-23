@@ -220,3 +220,9 @@ Owner accepted the revised idle silhouette. Tray controls, poses, transient capt
 ## Desktop edge contact
 
 The floor walk, selected-window perch and screen climb now have Windows renderer checks. The climb follows a planted mitten up either side, transfers the load at the corner, and uses alternating grips for overhead travel. The hat-avatar run measured 916 painted hand contacts at sizes 82, 116 and 156. The largest distance from an edge to the center of a visible mitten pixel was 0.50 display units. A loaded hand's target moved at most 0.49 display units between sampled frames. The shell preserved foreground focus. [Recorded motion](visuals/edge-climb.gif) and [reproduction steps](GOAL_2_DESKTOP.md).
+
+## Cloth sleeves and facial animation
+
+The hat model now uses a cloth sleeve with a rounded fingertip for each hand. The same sleeve follows the shoulder through a walk, a point, a climb and prop handling. The gaze and mouth respond to desktop animation states. The hat brim settles after movement, and both umbrella models pivot at the hand. Thought and speech captions have distinct tails.
+
+The offscreen pose review checked 408 frames at three sizes, followed by privacy, left-point, speech and release transitions and the complete hat trick. The offscreen climb checked 918 hat-model and 912 classic-model hand contacts, with a maximum measured visible gap of 0.99 display units for both models. All 51 Python tests passed. [Desktop pose sheet](visuals/cloth-poses.png) and [climb recording](visuals/edge-climb.gif).
