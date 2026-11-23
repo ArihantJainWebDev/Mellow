@@ -122,7 +122,7 @@ namespace MellowDesktop {
     }
     internal Model3DGroup[] Feet {get {return feet;}}
     internal Model3DGroup Model {get {return actor;}}
-    internal void Animate(double t,double? desktopStep=null,double left=0,double right=0,double blink=1,double glide=0,double cover=0){
+    internal void Animate(double t,double? desktopStep=null,double left=0,double right=0,double blink=1,double glide=0,double cover=0,bool groundedWalk=false){
         // Return through the pickup poses at the end so the loop joins cleanly.
         double s=t<=9?t:Math.Max(0,9-(t-9)*1.5);
         double walk=Beat(s,0,2),step=desktopStep??Math.Sin(4*P*walk),bob=.044*Math.Abs(step);
@@ -134,11 +134,13 @@ namespace MellowDesktop {
         double pitch=-9+165*lower,roll=6*step-12*lift+16*lower+3*settle;
         hat.Transform=Pose(hx,hy,hz,pitch,roll,1);
         canopy.Transform=Pose(.55,1.52,.13,0,-10,glide);
+        var leftGrip=hat.Transform.Transform(new Point3D(-.815,0,.13));
+        var rightGrip=hat.Transform.Transform(new Point3D(.815,0,.13));
         var fabric=new Point3DCollection(clothRest.Length);
         for(int k=0;k<clothRest.Length;k++){
             double h=(double)(k/77)/44,a=(k%77)*2*P/76;
             Point3D p=clothRest[k];double side=Math.Cos(a)>=0?1:-1,w=Sleeve(h,a);
-            Point3D grip=hat.Transform.Transform(new Point3D(side*.815,.0,.13));
+            Point3D grip=side<0?leftGrip:rightGrip;
             double reachX=grip.X-side*.93,reachY=grip.Y-.23,reachZ=grip.Z-.05;
             if(side<0){
                 reachX+=dig*(.45-.96*reveal);reachY+=dig*(.01+.81*reveal);reachZ+=dig*.11;
@@ -150,6 +152,8 @@ namespace MellowDesktop {
             double gesture=(side<0?left:right)/120;
             p.X+=side*w*.18*gesture;p.Y+=w*.55*gesture;
             p.X-=side*w*.64*cover;p.Y+=w*.41*cover;p.Z+=w*.42*cover;
+            // The supporting leg straightens while the opposite shoe clears the hem.
+            if(groundedWalk) p.Y+=hem*(.065*Math.Abs(step)+.12*knee);
             fabric.Add(p);
         }
         sheet.Positions=fabric;
@@ -165,7 +169,7 @@ namespace MellowDesktop {
         }
         var hand=hat.Transform.Transform(new Point3D(-.815,0,.13));
         umbrella.Transform=Pose(hand.X+.45-.96*reveal,hand.Y+.01+.81*reveal,hand.Z+.11,-14,-22,.85*Beat(s,6.85,7.55));
-        actor.Transform=Pose(desktopStep.HasValue?0:-.18+.34*walk,bob+.015*settle,0,0,1.6*step+2*reveal,1);
+        actor.Transform=Pose(desktopStep.HasValue?0:-.18+.34*walk,bob+(groundedWalk?.055*Math.Abs(step):0)+.015*settle,0,0,1.6*step+2*reveal,1);
         for(int i=0;i<2;i++)((GeometryModel3D)face.Children[i]).Transform=new ScaleTransform3D(1,blink*(1-.89*Bell((s-5.66)/.085)),1,0,.65,0);
     }
     void Camera(){

@@ -29,6 +29,8 @@ The ghost can walk to a side, climb to the upper edge and float across the prima
 
 Use the [character behavior brief](CHARACTER_BEHAVIOR.md) to review timing, body language and how Mellow interacts with the desktop.
 
+Right-click **Walk along the floor** to replay a short walk. On level travel each foot alternately stays on a fixed desktop point while the other swings forward. The hem rises over the swinging shoe and Mellow settles the current step when hovering or typing pauses a walk. A guided journey with a height change separates horizontal travel from the elevation change. The umbrella descent keeps its own motion. [Watch the rendered walk in both directions](visuals/grounded-walk.gif).
+
 ## Desktop signals and one-shot vision
 
 The desktop reads primary-display taskbar and selected window rectangles. Right-click **Perch on a window**, then hover over a restored application with room above its title bar. The ghost rides the top edge as the window moves. Revealing the bottom taskbar while the ghost stands there triggers a spring reaction. A local familiarity counter softens later encounters. Top-edge travel can lead to a hang and an umbrella descent. The accessibility guide refreshes a supported button or hyperlink's bounds while pointing. Hiding the control releases the target.

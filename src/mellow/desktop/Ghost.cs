@@ -110,10 +110,16 @@ namespace MellowDesktop {
             NoticeActivity(now);
             SenseTerrain(now);
             bool attending=state=="idle" && now<attentiveUntil;
-            if(!moving && (guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending)))walkTime+=dt;
+            bool advance=guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending);
+            if(advance) pauseAt=double.NaN;
+            else if(double.IsNaN(pauseAt)) pauseAt=onFoot?nextFootfall:walkTime;
+            if(!moving) walkTime=advance?walkTime+dt:Math.Min(walkTime+dt,Math.Max(walkTime,pauseAt));
             double stride,weight,direction;
             Navigate(walkTime,out stride,out weight,out direction);
-            if(!guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
+            if(!onFoot && !guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
+            ApplyPose(now,dt,attending,stride,weight,direction);
+        }
+        void ApplyPose(double now,double dt,bool attending,double stride,double weight,double direction) {
             double blend=1-Math.Exp(-dt*6);
             // A fresh typing burst gets one small acknowledgement, then he settles upright.
             double attentionAge=now-attentionStarted;
@@ -121,7 +127,7 @@ namespace MellowDesktop {
             double targetLean=state=="listen"?-8:state=="think"?10:climb?weight*9:nod;
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
-            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*42*weight;
+            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*(onFoot?55*Math.Min(1,weight*4):42*weight);
             double pivot=targetYaw-yaw;
             yaw+=pivot*blend;
             if(state=="privacy" || Math.Abs(pivot)>70) stride+=Math.Sin(yaw*Math.PI/36)*Math.Min(1,Math.Abs(pivot)/35);
@@ -133,7 +139,7 @@ namespace MellowDesktop {
             var turn=new Transform3DGroup();
             turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),yaw)));
             turn.Children.Add(new ScaleTransform3D(1+spring*.065,1-spring*.16,1,0,-.34,0));
-            turn.Children.Add(new TranslateTransform3D(0,hop+(clothGhost==null?.044*Math.Abs(stride):0),0));
+            turn.Children.Add(new TranslateTransform3D(0,hop+(clothGhost==null && !onFoot?.044*Math.Abs(stride):0),0));
             parts.Transform=turn;
             for(int i=0;i<2;i++) {
                 double step=stride*(2*i-1);
@@ -144,6 +150,7 @@ namespace MellowDesktop {
                     state=="speak"?31+12*Math.Sin(now*4):0):0;
                 if(i==1) goal=Math.Max(goal,144*Math.Max(hangAmount,glideAmount));
                 if(state=="privacy")goal=Math.Max(goal,125*Math.Min(1,Math.Abs(yaw)/165));
+                if(onFoot && state=="idle") goal+=16*Math.Max(0,-step);
                 goal+=Math.Abs(spring)*(quickDrop?65:42);
                 if(climb && weight>.02)goal+=(48+37*step)*weight;
                 double angle=i==0?armLeft:armRight;
@@ -164,7 +171,33 @@ namespace MellowDesktop {
                 privacyCover+=((state=="privacy" && yaw>110?1:0)-privacyCover)*blend;
                 double elapsed=time.Elapsed.TotalSeconds-trickStart;
                 if(elapsed>=0 && elapsed<15) clothGhost.Animate(elapsed);
-                else clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover);
+                else clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover,onFoot);
+            }
+            if(onFoot && !moving && state!="privacy" && time.Elapsed.TotalSeconds-trickStart>=15)
+                PlantFeet(hop);
+        }
+
+        void PlantFeet(double hop) {
+            // Express the two contacts in the camera plane. Undo the torso's
+            // lean, yaw and bounce on the shoes so a planted sole cannot skate.
+            var camera=(OrthographicCamera)view.Camera;
+            double units=camera.Width/size;
+            var up=Vector3D.CrossProduct(Vector3D.CrossProduct(camera.LookDirection,camera.UpDirection),camera.LookDirection);
+            up.Normalize();
+            var parent=Matrix3D.Identity;
+            if(clothGhost!=null) {
+                parent.Append(clothGhost.Model.Transform.Value);
+                parent.Append(body.Transform.Value);
+            }
+            parent.Append(parts.Transform.Value);
+            parent.Invert();
+            var shoes=clothGhost==null?feet:clothGhost.Feet;
+            for(int i=0;i<2;i++) {
+                if(clothGhost==null) boots[i].Transform=Transform3D.Identity;
+                var m=Matrix3D.Identity;
+                m.Translate(new Vector3D(footOffset[i]*units,0,0)+up*(hop+(i==swingFoot?swingHeight*units:0)));
+                m.Append(parent);
+                shoes[i].Transform=new MatrixTransform3D(m);
             }
         }
         void CaptureMotion(string path) {
@@ -196,6 +229,70 @@ namespace MellowDesktop {
                 gif.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp,null,meta,null));
             }
             using(var output=System.IO.File.Create(path)) gif.Save(output);
+        }
+        void VerifyWalk() {
+            var bounds=Bounds();
+            double startX=bounds.Left+bounds.Width*.4, distance=Math.Min(size*1.04,bounds.Right-startX);
+            if(distance<size*.4) throw new InvalidOperationException("Walk check needs more desktop width.");
+            var content=(FrameworkElement)window.Content;
+            int width=(int)content.ActualWidth,height=(int)content.ActualHeight;
+            bool capture=preview!=null && preview.EndsWith("-walk.gif",StringComparison.OrdinalIgnoreCase);
+            var gif=capture?new System.Windows.Media.Imaging.GifBitmapEncoder():null;
+            int samples=0;
+            double maxGap=0,maxSlide=0;
+            guiding=descending=false;state="idle";origin=destination=new Point(startX,bounds.Bottom);
+            window.Left=startX;window.Top=bounds.Bottom;
+            for(int pass=0;pass<2;pass++) {
+                Travel(new Point(startX+(pass==0?distance:0),bounds.Bottom),0,false);
+                holdUntil=travel+1;
+                int lastFoot=-1;
+                double firstContact=0;
+                for(int frame=0;frame<=60;frame++) {
+                    double clock=travel*frame/60,step,weight,direction;
+                    Navigate(clock,out step,out weight,out direction);
+                    ApplyPose(clock,travel/60,false,step,weight,direction);
+                    var image=new System.Windows.Media.Imaging.RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);
+                    image.Render(content);
+                    var data=new byte[width*height*4];
+                    image.CopyPixels(data,width*4,0);
+                    if(onFoot && swingHeight>size*.026) {
+                        int y=height-1,sum=0,count=0;
+                        for(;y>=0;y--) {
+                            for(int x=0;x<width;x++) if(data[(y*width+x)*4+3]>=96){sum+=x;count++;}
+                            if(count>0) break;
+                        }
+                        if(count==0) throw new InvalidOperationException("Walking avatar disappeared.");
+                        var pixel=content.PointToScreen(new Point((double)sum/count,y+1));
+                        var sole=PresentationSource.FromVisual(content).CompositionTarget.TransformFromDevice.Transform(pixel);
+                        maxGap=Math.Max(maxGap,Math.Abs(sole.Y-floorY));
+                        if(lastFoot==swingFoot) {
+                            maxSlide=Math.Max(maxSlide,Math.Abs(sole.X-firstContact));
+                            samples++;
+                        } else firstContact=sole.X;
+                        lastFoot=swingFoot;
+                    } else lastFoot=-1;
+                    if(gif!=null) {
+                        int canvasWidth=width+(int)Math.Ceiling(distance)+12,canvasHeight=(int)size+12;
+                        var drawing=new DrawingVisual();
+                        using(var dc=drawing.RenderOpen()) {
+                            dc.DrawRectangle(Brushes.MidnightBlue,null,new Rect(0,0,canvasWidth,canvasHeight));
+                            double baseline=canvasHeight-9;
+                            dc.DrawLine(new Pen(Brushes.LightSteelBlue,1),new Point(0,baseline+.5),new Point(canvasWidth,baseline+.5));
+                            for(int x=8;x<canvasWidth;x+=16)dc.DrawLine(new Pen(Brushes.SlateGray,1),new Point(x,baseline+1),new Point(x,baseline+4));
+                            dc.DrawImage(image,new Rect(6+window.Left-startX,baseline-(height-FootInset),width,height));
+                        }
+                        var scene=new System.Windows.Media.Imaging.RenderTargetBitmap(canvasWidth,canvasHeight,96,96,PixelFormats.Pbgra32);
+                        scene.Render(drawing);
+                        var meta=new System.Windows.Media.Imaging.BitmapMetadata("gif");
+                        meta.SetQuery("/grctlext/Delay",(ushort)Math.Max(2,Math.Round(travel*100/60)));
+                        gif.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(scene,null,meta,null));
+                    }
+                }
+            }
+            if(gif!=null)using(var file=System.IO.File.Create(preview))gif.Save(file);
+            Console.WriteLine("Walk: {0} stance comparisons, maximum gap {1:F2} DIP, planted sole drift {2:F2} DIP",samples,maxGap,maxSlide);
+            if(samples<12 || maxGap>1.5 || maxSlide>2)
+                throw new InvalidOperationException("Rendered feet lost contact during walking.");
         }
         void VerifyStandingPose() {
             // Render the full viewport, preserving the transparent space beneath the soles.
@@ -231,7 +328,7 @@ namespace MellowDesktop {
             if(verify) keptFocus &= foreground==GetForegroundWindow();
             if(verify && frames==12 && preview!=null && preview.EndsWith("-sheet.png")) RenderCharacterSheet(preview);
             else if(verify && frames==12 && !String.IsNullOrEmpty(preview) && preview.EndsWith(".gif",StringComparison.OrdinalIgnoreCase)) {
-                CaptureMotion(preview);
+                if(!preview.EndsWith("-walk.gif",StringComparison.OrdinalIgnoreCase)) CaptureMotion(preview);
             } else if(verify && frames==12 && !String.IsNullOrEmpty(preview)) {
                 var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(116,116,96,96,PixelFormats.Pbgra32);
                 var drawing=new DrawingVisual();
@@ -254,6 +351,7 @@ namespace MellowDesktop {
                 if(verifyStage==3 || time.Elapsed.TotalSeconds>65) window.Close();
             } else if(verify && time.Elapsed.TotalSeconds>2.6) {
                 if(verifyChat!="1" && !moving){
+                    VerifyWalk();
                     // Exercise an actual vertical route through the same interpolator as the timer.
                     var bounds=Bounds();
                     Travel(new Point(window.Left,bounds.Top),0,true);

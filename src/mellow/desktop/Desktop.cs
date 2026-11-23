@@ -127,6 +127,12 @@ namespace MellowDesktop {
                 var delay=new DispatcherTimer{Interval=TimeSpan.FromSeconds(2)};
                 delay.Tick+=delegate {delay.Stop();if(!quitting)PointAtControl();};delay.Start();
             });
+            menu.Items.Add("Walk along the floor",null,delegate {
+                LeavePerch();CancelTarget();descending=false;
+                var b=Bounds();double sign=window.Left<b.Left+b.Width/2?1:-1;
+                Travel(new Point(window.Left+sign*size*1.8,b.Bottom),walkTime,false);
+                holdUntil=walkTime+travel+3;Signal("idle","",0);
+            });
             menu.Items.Add("Climb to the top edge",null,delegate {
                 LeavePerch();CancelTarget();var b=Bounds();pathStage=1;
                 Travel(new Point(window.Left<b.Left+b.Width/2?b.Left:b.Right,window.Top),walkTime,false);
