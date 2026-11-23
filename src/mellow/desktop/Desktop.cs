@@ -211,7 +211,7 @@ namespace MellowDesktop {
                 if(!hotkeyRegistered) tray.Text="Mellow (shortcut busy; double-click to chat)";
             };
             window.Closed+=delegate {
-                quitting=true;StopWatching();DismissReply();
+                quitting=true;StopWatching();DismissReply();if(studyWindow!=null)studyWindow.Close();
                 if(checklist!=null)checklist.Close();
                 if(guideKey) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey+1);
                 if(hotkeyRegistered) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey);
@@ -251,6 +251,7 @@ namespace MellowDesktop {
             var chat=new MenuItem{Header="Chat with Mellow"};chat.Click+=delegate{OpenChat();};popup.Items.Add(chat);
             var awareness=new MenuItem{Header=watchBadge==null?"Enable desktop awareness":"Pause desktop awareness"};
             awareness.Click+=delegate{if(watchBadge==null)StartWatching();else StopWatching();};popup.Items.Add(awareness);
+            var studyDeskItem=new MenuItem{Header="Study desk"};studyDeskItem.Click+=delegate{OpenStudyDesk();};popup.Items.Add(studyDeskItem);
             popup.Items.Add(more);
             var exit=new MenuItem{Header="Exit Mellow"};exit.Click+=delegate{window.Close();};popup.Items.Add(exit);
             popup.Items.Add(new Separator());
@@ -299,6 +300,7 @@ namespace MellowDesktop {
         void SendInput(){
             string msg=input.Text.Trim();input.Clear();
             string intent=DesktopIntent(msg);
+            proposed=null;
             if(intent.StartsWith("/browser ",StringComparison.OrdinalIgnoreCase) ||
                intent.StartsWith("/screen watch",StringComparison.OrdinalIgnoreCase) ||
                intent.StartsWith("/screen ask ",StringComparison.OrdinalIgnoreCase) ||

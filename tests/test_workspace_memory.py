@@ -28,7 +28,30 @@ class WorkspaceMemoryTests(unittest.TestCase):
             history = History(Path(folder) / "data/history.db")
             export = Path(folder) / "export.json"
             history.export(export)
-            self.assertEqual(json.loads(export.read_text())["workspace_windows"],
-                             [{"position": 0, "app": "Code", "title": "Demo — revised"}])
+            self.assertEqual(json.loads(export.read_text(encoding="utf-8"))["workspace_windows"],
+                             [{"profile": "default", "position": 0, "app": "Code", "title": "Demo — revised"}])
             history.reset()
             self.assertEqual(run("load").stdout, b"")
+
+    def test_named_setups_pins_and_v8_migration(self):
+        from mellow.workspace_memory import transfer
+        import sqlite3
+        from contextlib import closing
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "history.db"
+            History(path)
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute("DROP TABLE workspace_windows")
+                db.execute("CREATE TABLE workspace_windows(position INTEGER PRIMARY KEY,app TEXT,title TEXT)")
+                db.execute("INSERT INTO workspace_windows VALUES(0,'Code','old project')")
+                db.execute("PRAGMA user_version=8")
+            self.assertEqual(transfer("load",path,[]), [("Code","old project")])
+            transfer("save",path,[("opera","lecture")],"Study")
+            entry = [("@link","https://example.com/notes")]
+            self.assertEqual(transfer("pin",path,entry,"study"), [("opera","lecture"), *entry])
+            self.assertEqual(transfer("pin",path,entry,"Study"), transfer("load",path,[],"study"))
+            with self.assertRaises(ValueError):
+                transfer("pin",path,[("@link","file:///notes.txt")],"study")
+            self.assertEqual(transfer("unpin",path,entry,"study"), [("opera","lecture")])
+            transfer("forget",path,[],"study")
+            self.assertEqual(transfer("list",path,[]), [("@profile","default")])

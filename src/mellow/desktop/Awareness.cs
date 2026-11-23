@@ -19,7 +19,7 @@ namespace MellowDesktop {
     sealed class Activity {
         internal IntPtr Handle;
         internal uint Pid;
-        internal string App, Title;
+        internal string App, Title, Address;
         internal DateTime At;
         internal string Label {get{return FriendlyApp(App)+(Title.Length==0?"":" · "+Title);}}
         internal bool Same(Activity other){
@@ -102,7 +102,7 @@ namespace MellowDesktop {
         if(proposed!=null && DateTime.UtcNow>=offerExpires){
             proposed=null;if(reading && dialogueVersion==offerDialogue)DismissReply();
         }
-        if(inspecting || (chatWindow!=null && chatWindow.IsActive)){
+        if(inspecting || (studyWindow!=null && studyWindow.IsActive) || (chatWindow!=null && chatWindow.IsActive)){
             aim=aimY=0;return;
         }
         if(!CanObserveFocus()){
@@ -112,7 +112,7 @@ namespace MellowDesktop {
         var item=ReadWindow(GetForegroundWindow(),true);
         if(item==null){if(current!=null)InvalidateScene();return;}
         bool changed=!item.Same(current);
-        Track(item);
+        Track(item);PollStudy(item,DateTime.UtcNow);
         Rect r=RectFor(item.Handle);
         if(!r.IsEmpty){
             var focus=new Point(r.Left+r.Width/2,r.Top+r.Height/2);
@@ -162,8 +162,8 @@ namespace MellowDesktop {
     int offerDialogue;
     static string EncodeField(string value){return Convert.ToBase64String(Encoding.UTF8.GetBytes(value));}
     static string DecodeField(string value){return Encoding.UTF8.GetString(Convert.FromBase64String(value));}
-    static List<Activity> SetupStore(string action,List<Activity> items){
-        var info=new ProcessStartInfo(Environment.GetEnvironmentVariable("MELLOW_PYTHON"),"-m mellow.workspace_memory "+action){
+    static List<Activity> SetupStore(string action,List<Activity> items,string profile){
+        var info=new ProcessStartInfo(Environment.GetEnvironmentVariable("MELLOW_PYTHON"),"-m mellow.workspace_memory "+action+" "+EncodeField(profile)){
             UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true};
         using(var proc=Process.Start(info)){
             foreach(var item in items)proc.StandardInput.WriteLine(EncodeField(item.App)+" "+EncodeField(item.Title));
@@ -186,39 +186,47 @@ namespace MellowDesktop {
         }
         return selected;
     }
-    async void SavedSetup(bool save){
+    async void SavedSetup(string action,string profile,string link,string browser=""){
         if(setupIO){LocalReply("One workspace request is already running.");return;}
-        if(watchBadge==null){LocalReply("Enable desktop awareness first.");return;}
-        var items=save?RecentWorkspace():new List<Activity>();
-        if(save && items.Count==0){LocalReply("Visit the windows you want me to remember first.");return;}
+        if(!ProfileName(profile)){LocalReply("Use a workspace name of 1–48 letters, numbers, spaces, dots or dashes.");return;}
+        if(watchBadge==null && (action=="save" || action=="load")){LocalReply("Enable desktop awareness first.");return;}
+        var items=action=="save"?RecentWorkspace():new List<Activity>();
+        if(action=="save" && items.Count==0){LocalReply("Visit your project windows first.");return;}
+        if(action=="pin" || action=="unpin"){
+            Uri url;
+            if(link.Length>1800 || !WebAddress(link,out url)){LocalReply("Use an HTTPS link without a username or password.");return;}
+            items.Add(new Activity{App=browser.Length>0?"@link:"+browser:"@link",Title=url.AbsoluteUri});
+        }
         int generation=watchGeneration,version=dialogueVersion;setupIO=true;
         try{
-            var saved=await Task.Run(()=>SetupStore(save?"save":"load",items));
+            var saved=await Task.Run(()=>SetupStore(action=="show"?"load":action,items,profile));
             if(quitting || watchGeneration!=generation || version!=dialogueVersion)return;
-            if(saved.Count==0){LocalReply("Visit your project windows, then say “remember my setup”.");return;}
-            if(save){
-                LocalReply("Saved this workspace locally:\n"+String.Join("\n",saved.ConvertAll(x=>x.Label).ToArray()));
-                showingScreenReply=true;return;
-            }
+            string label=profile=="default"?"Default workspace":profile;
+            string content=String.Join("\n",saved.ConvertAll(x=>IsLink(x)?x.Title:x.Label).ToArray());
+            if(action=="list"){LocalReply(saved.Count==0?"No saved setups.":String.Join("\n",saved.ConvertAll(x=>x.Title).ToArray()));return;}
+            if(action=="forget"){LocalReply("Cleared setup: "+label+".");return;}
+            if(action!="load"){LocalReply(label+"\n"+(content.Length>0?content:"No saved entries."));showingScreenReply=true;return;}
+            if(saved.Count==0){LocalReply("No saved entries for "+label+".");return;}
             var live=new List<Activity>();
             EnumWindows(delegate(IntPtr h,IntPtr unused){
                 var item=ReadWindow(h,true);if(item!=null)live.Add(item);return true;
             },IntPtr.Zero);
-            var matches=new List<Activity>();var missing=new List<string>();
-            foreach(var entry in saved){
-                var exact=live.FindAll(x=>x.App==entry.App && x.Title==entry.Title);
-                if(exact.Count==1)matches.Add(exact[0]);else missing.Add(entry.Label);
+            if(saved.Exists(IsLink)){
+                await Task.Run(()=>MatchOpenLinks(live,saved));
+                if(quitting || watchGeneration!=generation || version!=dialogueVersion)return;
             }
-            string unavailable=missing.Count>0?"\nClosed, renamed or ambiguous:\n"+String.Join("\n",missing.ToArray()):"";
-            if(matches.Count==0){LocalReply("None of the saved windows could be identified."+unavailable);showingScreenReply=true;return;}
-            PresentSetup(matches.ToArray(),"Restore these project windows?",unavailable);
-        }catch(Exception){if(!quitting && generation==watchGeneration)LocalReply("Could not access the saved workspace.");}
+            var missing=new List<string>();
+            var matches=PlanWorkspace(saved,live,missing);
+            string unavailable=missing.Count>0?"\nUnavailable or ambiguous:\n"+String.Join("\n",missing.ToArray()):"";
+            if(matches.Count==0){LocalReply("No available targets."+unavailable);showingScreenReply=true;return;}
+            PresentSetup(matches.ToArray(),"Bring back "+label+"?",unavailable);
+        }catch(Exception){if(!quitting && generation==watchGeneration)LocalReply("Workspace update failed. Check the saved data and the eight-link limit.");}
         finally{setupIO=false;}
     }
     void PresentSetup(Activity[] setup,string heading,string suffix){
         waitingSetup=null;if(setupHint!=null)setupHint.Visibility=Visibility.Collapsed;
         proposed=setup;offerExpires=DateTime.UtcNow.AddMinutes(2);
-        var names=Array.ConvertAll(setup,x=>x.Label);
+        var names=Array.ConvertAll(setup,PlanLabel);
         LocalReply(heading+"\n"+String.Join("\n",names)+suffix);
         showingScreenReply=true;offerDialogue=dialogueVersion;PaintSetupChoices();
     }
@@ -251,15 +259,27 @@ namespace MellowDesktop {
         var targets=proposed;proposed=null;
         if(targets==null || DateTime.UtcNow>=offerExpires){LocalReply("There is no current workspace offer.");return;}
         foreach(var t in targets){
-            if(!t.Same(ReadWindow(t.Handle,true))){LocalReply("One of the proposed windows changed. I dropped that offer.");return;}
+            Uri link;
+            bool valid=t.Handle!=IntPtr.Zero?t.Same(ReadWindow(t.Handle,true)):
+                IsLink(t)?WebAddress(t.Title,out link):KnownExecutable(t.App)!=null;
+            if(!valid){LocalReply("A proposed target changed. Ask me to preview the workspace again.");return;}
         }
-        for(int i=targets.Length-1;i>=0;i--){
-            var t=targets[i];
-            if(IsIconic(t.Handle))ShowWindowAsync(t.Handle,9);
-            if(i>0)SetForegroundWindow(t.Handle);
+        int opened=0,windows=0;var failures=new List<string>();
+        foreach(var t in targets){
+            try{
+                if(t.Handle==IntPtr.Zero){
+                    if(IsLink(t))OpenWorkspaceLink(t);
+                    else Process.Start(new ProcessStartInfo(KnownExecutable(t.App)){UseShellExecute=false});
+                    opened++;
+                }else{
+                    if(IsIconic(t.Handle))ShowWindowAsync(t.Handle,9);
+                    if(SetForegroundWindow(t.Handle))windows++;else failures.Add(FriendlyApp(t.App)+" could not take focus");
+                }
+            }catch(Exception){failures.Add("Could not open "+t.Label);}
         }
-        bool focused=SetForegroundWindow(targets[0].Handle);
-        LocalReply(focused?"Requested your workspace and focused "+targets[0].App+".":"Requested the minimized windows. Windows kept the current app in front.");
+        if(targets[0].Handle!=IntPtr.Zero)SetForegroundWindow(targets[0].Handle);
+        LocalReply("Workspace requested. Windows focused: "+windows+". Apps or tabs requested: "+opened+"."+
+            (failures.Count>0?"\n"+String.Join("\n",failures.ToArray()):""));
     }
     static bool SameCapture(Activity started,Activity ended,int version,int liveVersion){
         return started!=null && started.Same(ended) && version==liveVersion;

@@ -100,6 +100,7 @@ namespace MellowDesktop {
             Focusable=false,Child=shell};
     }
     void DismissReply(){
+        if(dialogueVersion==offerDialogue)proposed=null;
         dismissedReply=true;reading=false;if(replyPopup!=null)replyPopup.IsOpen=false;
         if(state=="speak"||state=="read")Signal("idle","",0);
     }

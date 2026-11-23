@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from mellow.memory_policy import statement, words
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 14
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -109,7 +109,62 @@ class History:
             if version == 7:
                 db.execute("""CREATE TABLE IF NOT EXISTS workspace_windows (
                     position INTEGER PRIMARY KEY, app TEXT NOT NULL, title TEXT NOT NULL)""")
-                db.execute("PRAGMA user_version = 8")
+                version = 8
+            if version == 8:
+                columns = {row[1] for row in db.execute("PRAGMA table_info(workspace_windows)")}
+                if "profile" not in columns:
+                    db.execute("ALTER TABLE workspace_windows RENAME TO legacy_workspace_windows")
+                    db.execute("""CREATE TABLE workspace_windows (
+                        profile TEXT NOT NULL, position INTEGER NOT NULL, app TEXT NOT NULL,
+                        title TEXT NOT NULL, PRIMARY KEY(profile,position))""")
+                    db.execute("""INSERT INTO workspace_windows(profile,position,app,title)
+                        SELECT 'default',position,app,title FROM legacy_workspace_windows""")
+                    db.execute("DROP TABLE legacy_workspace_windows")
+                db.execute("""CREATE TABLE IF NOT EXISTS workspace_links (
+                    profile TEXT NOT NULL, url TEXT NOT NULL, PRIMARY KEY(profile,url))""")
+                version = 9
+            if version == 9:
+                db.execute("""CREATE TABLE IF NOT EXISTS study_mixes (
+                    id INTEGER PRIMARY KEY, label TEXT NOT NULL COLLATE NOCASE UNIQUE, url TEXT NOT NULL UNIQUE,
+                    hidden INTEGER NOT NULL DEFAULT 0)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS study_sessions (
+                    id INTEGER PRIMARY KEY, started INTEGER NOT NULL, ended INTEGER)""")
+                db.execute("CREATE UNIQUE INDEX IF NOT EXISTS one_study_session ON study_sessions((1)) WHERE ended IS NULL")
+                db.execute("""CREATE TABLE IF NOT EXISTS study_picks (
+                    id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
+                    mix_id INTEGER NOT NULL REFERENCES study_mixes(id), picked_at INTEGER NOT NULL,
+                    liked INTEGER NOT NULL DEFAULT 0, skipped INTEGER NOT NULL DEFAULT 0)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS study_tracks (
+                    id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
+                    at INTEGER NOT NULL, source TEXT NOT NULL, title TEXT NOT NULL, artist TEXT NOT NULL)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS study_settings (
+                    id INTEGER PRIMARY KEY CHECK(id=1), app TEXT NOT NULL DEFAULT '',
+                    cue TEXT NOT NULL DEFAULT '',source TEXT NOT NULL DEFAULT '')""")
+                db.execute("INSERT OR IGNORE INTO study_settings(id) VALUES(1)")
+                version = 10
+            if version == 10:
+                db.execute("""CREATE TABLE IF NOT EXISTS desktop_moments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, name TEXT NOT NULL,
+                    app TEXT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL,
+                    track TEXT NOT NULL, artist TEXT NOT NULL, mix TEXT NOT NULL, search TEXT NOT NULL)""")
+                version = 11
+            if version == 11:
+                if "topic" not in {r[1] for r in db.execute("PRAGMA table_info(study_sessions)")}:
+                    db.execute("ALTER TABLE study_sessions ADD COLUMN topic TEXT NOT NULL DEFAULT ''")
+                version = 12
+            if version == 12:
+                if "browser" not in {r[1] for r in db.execute("PRAGMA table_info(workspace_links)")}:
+                    db.execute("ALTER TABLE workspace_links ADD COLUMN browser TEXT NOT NULL DEFAULT ''")
+                version = 13
+            if version == 13:
+                if "auto_skip" not in {r[1] for r in db.execute("PRAGMA table_info(study_settings)")}:
+                    db.execute("ALTER TABLE study_settings ADD COLUMN auto_skip INTEGER NOT NULL DEFAULT 0")
+                db.execute("""CREATE TABLE IF NOT EXISTS study_song_feedback (
+                    session_id INTEGER NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
+                    source TEXT NOT NULL, song TEXT NOT NULL, artist TEXT NOT NULL,
+                    vote TEXT NOT NULL CHECK(vote IN ('keep','skip')), at INTEGER NOT NULL,
+                    PRIMARY KEY(session_id,source,song,artist))""")
+                db.execute("PRAGMA user_version = 14")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -168,10 +223,16 @@ class History:
             db.execute("DELETE FROM sessions")
             db.execute("DELETE FROM assignments")
             db.execute("DELETE FROM workspace_windows")
+            db.execute("DELETE FROM workspace_links")
+            db.execute("DELETE FROM desktop_moments")
+            db.execute("DELETE FROM study_sessions")
+            db.execute("DELETE FROM study_mixes")
+            db.execute("UPDATE study_settings SET app='',cue='',source='',auto_skip=0 WHERE id=1")
 
     def export(self, path: Path) -> None:
         tables = ("sessions", "turns", "active_chat", "memory_candidates", "memory_jobs",
-                  "automatic_memories", "hidden_turns", "assignments", "assignment_notices", "workspace_windows")
+                  "automatic_memories", "hidden_turns", "assignments", "assignment_notices", "workspace_windows", "workspace_links",
+                  "study_mixes", "study_sessions", "study_picks", "study_tracks", "study_settings", "desktop_moments", "study_song_feedback")
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             db.row_factory = sqlite3.Row

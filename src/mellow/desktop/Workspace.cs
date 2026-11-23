@@ -44,11 +44,11 @@ namespace MellowDesktop {
             if(watchTimer!=null){watchTimer.Stop();watchTimer=null;}
             SystemEvents.SessionSwitch-=OnSessionChange;
         };
-        watchBadge.Show();
+        watchBadge.Show();StudyAction("status",null,false);
         SaveAwarenessPreference(1);
         SystemEvents.SessionSwitch+=OnSessionChange;
         watchTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
-        watchTimer.Tick+=delegate{PollActivity();};watchTimer.Start();PollActivity();
+        watchTimer.Tick+=delegate{PollActivity();PollStudyMusic(DateTime.UtcNow);};watchTimer.Start();PollActivity();
     }
     void OnSessionChange(object sender,SessionSwitchEventArgs e){
         if(e.Reason==SessionSwitchReason.SessionLock || e.Reason==SessionSwitchReason.SessionLogoff ||
@@ -78,7 +78,7 @@ namespace MellowDesktop {
             if(question.Length>0)LocalReply("A local screen check is running. Try your question again in a moment.");
             return;
         }
-        if(inspecting || (chatWindow!=null && chatWindow.IsVisible) || !CanObserveFocus()){
+        if(inspecting || (studyWindow!=null && studyWindow.IsActive) || (chatWindow!=null && chatWindow.IsVisible) || !CanObserveFocus()){
             observation="";watchLabel.Text="Screen paused · focus";if(question.Length>0)LocalReply("Screen paused for this focus. Return to a supported app and try again.");return;
         }
         int generation=watchGeneration,requestedDuring=dialogueVersion;
@@ -178,14 +178,15 @@ namespace MellowDesktop {
         return message;
     }
     bool WorkspaceCommand(string message){
+        if(SetupCommand(message) || StudyCommand(message))return true;
         message=DesktopIntent(message);
         string[] parts=message.Split(new[]{' '},2);
         string key=parts[0].ToLowerInvariant(),arg=parts.Length>1?parts[1].Trim():"";
         if(key=="/activity" || key=="/recent-apps"){DescribeActivity(key=="/recent-apps");return true;}
         if(key=="/back-to"){RewindTo(arg);return true;}
-        if(key=="/save-setup"){SavedSetup(true);return true;}
+        if(key=="/save-setup"){SavedSetup("save","default","");return true;}
         if(key=="/restore-setup"){
-            if(proposed!=null && DateTime.UtcNow<offerExpires)RestoreProposed();else SavedSetup(false);
+            SavedSetup("load","default","");
             return true;
         }
         if(key=="/skip-setup"){proposed=null;LocalReply("Okay, carry on.");return true;}
