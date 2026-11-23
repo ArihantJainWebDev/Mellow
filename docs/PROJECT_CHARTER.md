@@ -8,6 +8,12 @@ Build Mellow as a deeply personal OS companion: a recognizable presence that lea
 
 The first intended user is the owner. Future contributors should be able to run their own companion without receiving the owner's personal data.
 
+## Everyday desktop awareness
+
+Mellow should understand a work session across apps. While Arihant discusses Mellow in an AI chat, the visible conversation may identify the project. Windows can separately report a game running in the background. Keep foreground activity, background presence and inferred intent distinct. Reconsider the inference when the desktop changes or the owner corrects it.
+
+Mellow should gradually adapt how he acts. An enabled study-music routine can recognize a study session, start YouTube Music, choose tracks from known preferences and adapt future choices from skips, likes and corrections. The owner can stop the routine or change what Mellow learned. Browser, media and WhatsApp interactions belong to the broader product direction. Permission to manage playback applies only to playback. Sending a WhatsApp message requires its own authorization.
+
 ## Goal 1 — memory-aware CLI companion
 
 Release a usable terminal application with responsive Groq conversation, recent context, persistent sessions, personal and episodic memory, semantic retrieval, and local background processing through LM Studio. Include personality, memory control, failure handling, and evidence of quality.

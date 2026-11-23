@@ -66,3 +66,7 @@ Use MIT for project code. Direct ordinary statements can be saved locally. Ambig
 ## November 23, 2026 · Desktop usefulness
 
 A single composer serves chat, local assignments and explicit desktop commands. Reply pages advance at the reader's pace. The local assignment parser performs deterministic SQLite operations, including notice replay detection. The screen watcher samples on a timer with one in-flight local request to limit laptop load. Image interpretation cannot issue an OS command. External actions originate from the user's composer or menu. Voice, webcam and avatar artwork are deferred.
+
+## November 23, 2026 · Awareness before mail
+
+Prioritize cross-app activity understanding and adaptive behavior. Study music is the first planned autonomous routine. The AI-chat and background-game example is the acceptance scenario for awareness. See the current roadmap for the sequence.
