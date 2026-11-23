@@ -119,6 +119,7 @@ namespace MellowDesktop {
             double stride,weight,direction;
             Navigate(walkTime,out stride,out weight,out direction);
             if(!landing && !onFoot && !guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
+            TickReply(now);
             ApplyPose(now,dt,attending,stride,weight,direction);
         }
         void ApplyPose(double now,double dt,bool attending,double stride,double weight,double direction) {
@@ -362,7 +363,7 @@ namespace MellowDesktop {
                     verifyStage=2;input.Text="Respond with just MELLOWOK.";SendInput();
                 }
                 if(verifyStage==2 && ready) {
-                    if(!transcript.Text.Contains("MELLOWOK") || state!="speak") throw new InvalidOperationException("Chat acceptance failed.");
+                    if(!reply.ToString().Contains("MELLOWOK") || !finished) throw new InvalidOperationException("Chat acceptance failed.");
                     verifyStage=3; chatWindow.Hide(); Signal("offer","Preview: time for a break?",4);
                 }
                 if(verifyStage==3 || time.Elapsed.TotalSeconds>65) window.Close();

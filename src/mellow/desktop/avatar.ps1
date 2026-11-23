@@ -1,4 +1,4 @@
-param([switch]$Classic, [switch]$HatTrick, [switch]$Verify, [switch]$PoseSheet, [switch]$Offscreen, [string]$Preview)
+param([switch]$VerifyScreen, [switch]$VerifyInteraction, [switch]$Classic, [switch]$HatTrick, [switch]$Verify, [switch]$PoseSheet, [switch]$Offscreen, [string]$Preview)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName PresentationCore,PresentationFramework,WindowsBase,System.Xaml,System.Windows.Forms,System.Drawing,UIAutomationClient,UIAutomationTypes
 $references = @(
@@ -17,7 +17,15 @@ if ($HatTrick) {
     [MellowDesktop.HatTheatre]::Run($Preview)
     return
 }
-Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot EdgeGrip.cs),(Join-Path $PSScriptRoot GripVerification.cs),(Join-Path $PSScriptRoot PoseReview.cs),(Join-Path $PSScriptRoot Character.cs),(Join-Path $PSScriptRoot Terrain.cs),(Join-Path $PSScriptRoot Perch.cs),(Join-Path $PSScriptRoot PerchVerification.cs),(Join-Path $PSScriptRoot RegionVision.cs),(Join-Path $PSScriptRoot Checkpoint.cs),(Join-Path $PSScriptRoot ClothSleeves.cs),(Join-Path $PSScriptRoot HatTheatre.cs)) -ReferencedAssemblies $references
+Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Dialogue.cs),(Join-Path $PSScriptRoot Workspace.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot EdgeGrip.cs),(Join-Path $PSScriptRoot GripVerification.cs),(Join-Path $PSScriptRoot PoseReview.cs),(Join-Path $PSScriptRoot Character.cs),(Join-Path $PSScriptRoot Terrain.cs),(Join-Path $PSScriptRoot Perch.cs),(Join-Path $PSScriptRoot PerchVerification.cs),(Join-Path $PSScriptRoot RegionVision.cs),(Join-Path $PSScriptRoot Checkpoint.cs),(Join-Path $PSScriptRoot ClothSleeves.cs),(Join-Path $PSScriptRoot HatTheatre.cs)) -ReferencedAssemblies $references
+if ($VerifyScreen) {
+    [MellowDesktop.Ghost]::VerifyScreen()
+    return
+}
+if ($VerifyInteraction) {
+    [MellowDesktop.Ghost]::VerifyDialogue()
+    return
+}
 if ($Offscreen) {
     [MellowDesktop.Ghost]::ReviewRoute($Preview, $Classic.IsPresent)
     return

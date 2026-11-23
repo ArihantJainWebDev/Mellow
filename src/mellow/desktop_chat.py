@@ -33,6 +33,6 @@ def read_message(prompt):
 if __name__ == "__main__":
     output = Output()
     with redirect_stdout(output), redirect_stderr(output):
-        code = chat(read_message=read_message, event=emit)
+        code = chat(read_message=read_message, event=emit, local_fallback=True)
     emit("end", str(code))
     sys.exit(code)

@@ -61,3 +61,8 @@ Adopt the five-goal [roadmap](ROADMAP.md) and [visual references](visuals/README
 ## 2026-11-22 release
 
 Use MIT for project code. Direct ordinary statements can be saved locally. Ambiguous material stays in review. Local model classification is fallible. Retain exportable source text on recall suppression and provide separate physical record deletion controls.
+
+
+## November 23, 2026 · Desktop usefulness
+
+A single composer serves chat, local assignments and explicit desktop commands. Reply pages advance at the reader's pace. The local assignment parser performs deterministic SQLite operations, including notice replay detection. The screen watcher samples on a timer with one in-flight local request to limit laptop load. Image interpretation cannot issue an OS command. External actions originate from the user's composer or menu. Voice, webcam and avatar artwork are deferred.

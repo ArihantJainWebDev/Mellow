@@ -1,6 +1,13 @@
 # Progress tracker
 
-Updated: 2026-11-19 (Asia/Kolkata).
+Updated November 23, 2026 (Asia/Kolkata).
+
+## Desktop usefulness milestone
+
+- Windows composer and paged reply cloud implemented. Offscreen WPF verification measured eleven pages of multilingual fixture text and checked speaking and waiting states.
+- Assignments support local add, reschedule, completion, due queries, notice import, export and reset. Restart verification used separate desktop-worker processes and temporary data.
+- Opt-in primary-screen sampling and explicit browser/desktop commands implemented. The production vision bridge read the expected word on a generated quiz card using the installed local model. Physical focus restoration, browsing across real sites and the owner's live desktop capture still need hands-on acceptance.
+- Voice, webcam, avatar art and external account connectors are deferred. [Run and test this milestone](DESKTOP_WORKFLOW.md).
 
 ## Current position
 

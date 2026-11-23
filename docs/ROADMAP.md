@@ -1,5 +1,8 @@
 # Mellow project roadmap
 
+**Current implementation order, November 23.** Finish paged desktop conversation, deliver the local assignment lifecycle, then add visible screen sampling and explicit browser and desktop actions. Avatar art, voice and webcam work are deferred. Mail.com and Pod.ai integrations remain later Goal 4 work. [Current scope and verification](DESKTOP_WORKFLOW.md).
+
+
 Agreed product baseline • 22 November 2026
 
 Mellow is a Windows companion that shares one ongoing conversation with its owner. It learns from daily life, offers help on its own, and performs permitted work. Each person running the open-source project owns their own data. The legacy prototype is a read-only reference.

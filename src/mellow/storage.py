@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from mellow.memory_policy import statement, words
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -96,7 +96,16 @@ class History:
                     turn_id INTEGER PRIMARY KEY REFERENCES turns(id) ON DELETE CASCADE)""")
                 db.execute("""CREATE TABLE IF NOT EXISTS automatic_jobs (
                     turn_id INTEGER PRIMARY KEY REFERENCES memory_jobs(turn_id) ON DELETE CASCADE)""")
-                db.execute("PRAGMA user_version = 6")
+                version = 6
+            if version == 6:
+                db.execute("""CREATE TABLE IF NOT EXISTS assignments (
+                    id INTEGER PRIMARY KEY, title TEXT NOT NULL, title_key TEXT NOT NULL,
+                    due TEXT NOT NULL, source TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0
+                    CHECK(done IN (0,1)))""")
+                db.execute("""CREATE TABLE IF NOT EXISTS assignment_notices (
+                    fingerprint TEXT PRIMARY KEY, task_id INTEGER NOT NULL
+                    REFERENCES assignments(id) ON DELETE CASCADE)""")
+                db.execute("PRAGMA user_version = 7")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -153,10 +162,11 @@ class History:
         with closing(self._connect()) as db, db:
             db.execute("DELETE FROM turns")
             db.execute("DELETE FROM sessions")
+            db.execute("DELETE FROM assignments")
 
     def export(self, path: Path) -> None:
         tables = ("sessions", "turns", "active_chat", "memory_candidates", "memory_jobs",
-                  "automatic_memories", "hidden_turns")
+                  "automatic_memories", "hidden_turns", "assignments", "assignment_notices")
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             db.row_factory = sqlite3.Row

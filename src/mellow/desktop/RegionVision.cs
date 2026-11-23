@@ -39,14 +39,7 @@ namespace MellowDesktop {
             if(area.IsEmpty)return;
             await Task.Delay(160);
             if(quitting)return;
-            byte[] bytes;
-            using(var capture=new Drawing.Bitmap((int)area.Width,(int)area.Height)){
-                using(var g=Drawing.Graphics.FromImage(capture))
-                    g.CopyFromScreen((int)area.X,(int)area.Y,0,0,capture.Size);
-                double scale=Math.Min(1,1100.0/Math.Max(capture.Width,capture.Height));
-                using(var reduced=new Drawing.Bitmap(capture,Math.Max(1,(int)(capture.Width*scale)),Math.Max(1,(int)(capture.Height*scale))))
-                using(var output=new MemoryStream()){reduced.Save(output,Drawing.Imaging.ImageFormat.Png);bytes=output.ToArray();}
-            }
+            byte[] bytes=CaptureArea(area);
             window.Show();Signal("think","Checking your selection locally…",35);
             string[] lines=await Task.Run(()=>AskVision(bytes,task));
             if(quitting)return;
@@ -61,18 +54,18 @@ namespace MellowDesktop {
                 holdUntil=departure+travel+4;
             }
             Signal("offer",answer,9);
-            if(transcript!=null)transcript.AppendText("\nLocal vision: "+answer+"\n");
+            LocalReply(answer);
         } catch(Exception){if(!quitting)Signal("offer","Local vision failed. Check the LM Studio vision model.",5);}
         finally{inspecting=false;if(!quitting)window.Show();}
     }
-    static string[] AskVision(byte[] bytes,string task){
+    static string[] AskVision(byte[] bytes,string task,string question=""){
         var model=Environment.GetEnvironmentVariable("MELLOW_VISION_MODEL")??"qwen3-vl-4b-instruct";
         if(!System.Text.RegularExpressions.Regex.IsMatch(model,@"^[a-zA-Z0-9_./:-]+$"))throw new ArgumentException();
         var info=new ProcessStartInfo(Environment.GetEnvironmentVariable("MELLOW_PYTHON"),
             "-m mellow.local_vision "+task+" "+model){UseShellExecute=false,RedirectStandardInput=true,
             RedirectStandardOutput=true,CreateNoWindow=true};
         using(var proc=Process.Start(info)){
-            proc.StandardInput.WriteLine(Convert.ToBase64String(bytes));proc.StandardInput.Close();
+            proc.StandardInput.WriteLine(Convert.ToBase64String(bytes));proc.StandardInput.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(question)));proc.StandardInput.Close();
             var text=proc.StandardOutput.ReadToEnd();
             proc.WaitForExit();if(proc.ExitCode!=0)throw new IOException();
             return text.Trim().Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries);

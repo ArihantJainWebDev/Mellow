@@ -12,11 +12,12 @@ from mellow.config import ConfigurationError, Settings, load_settings
 from mellow.providers.groq import ProviderError, stream_reply
 from mellow.retrieval import SemanticRecall, memory_message
 from mellow.storage import History
+from mellow.tasks import task_command
 from mellow.summary import session_summary
 from mellow.memory_worker import start_worker
 
 
-def main(argv: list[str] | None = None, *, read_message=None, event=None) -> int:
+def main(argv: list[str] | None = None, *, read_message=None, event=None, local_fallback=False) -> int:
     parser = argparse.ArgumentParser(description="Mellow: chat with Groq.")
     parser.add_argument(
         "--env-file", type=Path, default=Path(".env"),
@@ -37,8 +38,10 @@ def main(argv: list[str] | None = None, *, read_message=None, event=None) -> int
     try:
         settings = load_settings(arguments.env_file)
     except ConfigurationError as error:
-        print(f"Configuration error: {error}", file=sys.stderr)
-        return 2
+        if not local_fallback:
+            print(f"Configuration error: {error}", file=sys.stderr)
+            return 2
+        settings = None
 
     if arguments.check_config:
         print("Required configuration is present. No API request was made.")
@@ -49,8 +52,8 @@ def main(argv: list[str] | None = None, *, read_message=None, event=None) -> int
 
     try:
         history = None if arguments.private else History(Path("data/history.db"))
-        memory_model = arguments.memory_model or settings.memory_model
-        embedding_model = arguments.embedding_model or settings.embedding_model
+        memory_model = arguments.memory_model or (settings.memory_model if settings else None)
+        embedding_model = arguments.embedding_model or (settings.embedding_model if settings else None)
         semantic = SemanticRecall(embedding_model) if history is not None and embedding_model else None
         if history is None or not memory_model:
             return _chat(settings, history, semantic=semantic, read_message=read_message, event=event)
@@ -66,7 +69,7 @@ def main(argv: list[str] | None = None, *, read_message=None, event=None) -> int
         return 1
 
 
-def _chat(settings: Settings, history: History | None, *, extract_memory: bool = False,
+def _chat(settings: Settings | None, history: History | None, *, extract_memory: bool = False,
           semantic: SemanticRecall | None = None, read_message=None, event=None) -> int:
     conversation = Conversation()
     session_id = None
@@ -94,6 +97,10 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             print()
             return 130
         if not message:
+            continue
+        local_answer = task_command(message, history)
+        if local_answer is not None:
+            print(local_answer)
             continue
         correction = re.fullmatch(r"change my memory from (.{1,300}?) to (.{1,300})", message, re.I)
         if correction and history is not None:
@@ -132,7 +139,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                     history.reset()
                     session_id = None
                     conversation.clear()
-                    print("All saved history and memories deleted.")
+                    print("All saved history, memories and assignments deleted.")
                 elif action == "/delete-session" and re.fullmatch(r"[1-9][0-9]{0,17} CONFIRM", value):
                     target = int(value.split()[0])
                     removed = history.delete_session(target)
@@ -153,6 +160,7 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
             if command == "/help":
                 print("/help  Show commands\n/new or /clear  Start a fresh conversation\n/quit  Exit Mellow")
                 if history is not None:
+                    print("/tasks  Show open assignments. Use /task for examples and /notice to import.")
                     print("/sessions  List saved sessions\n/resume ID  Resume a saved session")
                     print("/export PATH  Export personal data to a new file\n/delete-session ID CONFIRM  Delete a chat and derived data\n/reset CONFIRM  Delete all saved data\nForget TOPIC  Exclude matching and subsequent context from recall")
                     print("/summary  Show older context for this session")
@@ -235,6 +243,9 @@ def _chat(settings: Settings, history: History | None, *, extract_memory: bool =
                 print("Conversation cleared. Previously saved history is retained. Approved memories are still available.")
             else:
                 print("Unknown command. Type /help for available commands.", file=sys.stderr)
+            continue
+        if settings is None:
+            print("Chat needs GROQ_API_KEY and GROQ_MODEL. Local assignments are available. Reopen Mellow after configuring chat.")
             continue
         if event:
             event("think", "Preparing a reply…")

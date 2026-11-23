@@ -25,7 +25,7 @@ namespace MellowDesktop {
         Forms.NotifyIcon tray;
         Forms.ContextMenuStrip menu;
         Window chatWindow;
-        TextBox transcript, input;
+        TextBox input;
         Process backend;
         Border bubble;
         StackPanel bubbleStack;
@@ -40,8 +40,6 @@ namespace MellowDesktop {
         readonly string verifyChat=Environment.GetEnvironmentVariable("MELLOW_VERIFY_CHAT");
         int verifyStage;
         string state="idle";
-        string answer="";
-        DateTime lastPaint;
         static int Pref(string key,int fallback) {
             object v=Registry.GetValue(@"HKEY_CURRENT_USER\"+Prefs,key,fallback);
             return v is int ? (int)v : fallback;
@@ -123,10 +121,12 @@ namespace MellowDesktop {
             visionMenu.DropDownItems.Add("Compare visible products",null,delegate {InspectRegion("compare");});
             visionMenu.DropDownItems.Add("Show unfinished checklist item",null,delegate {InspectRegion("checkpoint");});
             menu.Items.Add(visionMenu);
+            menu.Items.Add("Watch primary screen locally",null,delegate{StartWatching();});
+            menu.Items.Add("Stop screen observation",null,delegate{StopWatching();});
             menu.Items.Add("Open project checkpoint…",null,delegate {OpenCheckpoint();});
             menu.Items.Add("Perch on a window",null,delegate {Later(delegate {SelectWindow(false);});});
             menu.Items.Add("Watch a progress bar",null,delegate {Later(WatchProgress);});
-            menu.Items.Add("Dismiss / stop watching",null,delegate {dismissed=true;progressElement=null;if(perch!=IntPtr.Zero) DropFromPerch();else if(edgeMove!=EdgeMove.None) ReleaseEdge(walkTime);CancelTarget();Signal("idle","",0);});
+            menu.Items.Add("Dismiss / stop watching",null,delegate {StopWatching();dismissed=true;progressElement=null;if(perch!=IntPtr.Zero) DropFromPerch();else if(edgeMove!=EdgeMove.None) ReleaseEdge(walkTime);CancelTarget();Signal("idle","",0);});
             menu.Items.Add("Leave ledge",null,delegate {if(perch!=IntPtr.Zero) DropFromPerch();else if(edgeMove!=EdgeMove.None)ReleaseEdge(walkTime);});
             menu.Items.Add("Close a window…",null,delegate {Later(delegate {SelectWindow(true);});});
             menu.Items.Add("Chat with Mellow",null,delegate {OpenChat();});
@@ -175,7 +175,7 @@ namespace MellowDesktop {
             var mute=new Forms.ToolStripMenuItem("Quiet (hide bubbles)"){CheckOnClick=true};
             mute.CheckedChanged+=delegate {quiet=mute.Checked; if(quiet) Signal("idle","",0);};
             menu.Items.Add(mute);
-            menu.Items.Add("Hide / show ghost",null,delegate {if(window.IsVisible) window.Hide(); else window.Show();});
+            menu.Items.Add("Hide / show ghost",null,delegate {if(window.IsVisible){StopWatching();window.Hide();}else window.Show();});
             var previews=new Forms.ToolStripMenuItem("Preview a pose");
             foreach(string name in new string[]{"listen","think","point","offer","speak","rest","privacy"}) {
                 string pose=name;
@@ -208,7 +208,7 @@ namespace MellowDesktop {
                 if(!hotkeyRegistered) tray.Text="Mellow (shortcut busy; double-click to chat)";
             };
             window.Closed+=delegate {
-                quitting=true;
+                quitting=true;StopWatching();DismissReply();
                 if(checklist!=null)checklist.Close();
                 if(guideKey) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey+1);
                 if(hotkeyRegistered) UnregisterHotKey(new WindowInteropHelper(window).Handle,Hotkey);
@@ -231,6 +231,7 @@ namespace MellowDesktop {
             SetWindowLong(h,-20,value?style|0x20:style&~0x20);
         }
         void Signal(string next,string text,double seconds) {
+            if(next=="privacy")StopWatching();
             state=next; until=time.Elapsed.TotalSeconds+seconds;
             bubbleText.Text=text;
             bool speaking=next=="speak"||next=="offer";
@@ -246,32 +247,27 @@ namespace MellowDesktop {
         }
         void OpenChat() {
             if(!window.IsVisible) window.Show();
-            if(chatWindow==null) {
-                transcript=new TextBox{IsReadOnly=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
-                input=new TextBox{Margin=new Thickness(0,6,0,0),IsEnabled=false};
-                var panel=new DockPanel{Margin=new Thickness(10)};
-                DockPanel.SetDock(input,Dock.Bottom);panel.Children.Add(input);panel.Children.Add(transcript);
-                chatWindow=new Window{Title="Mellow chat",Width=460,Height=340,Content=panel};
-                chatWindow.Closing+=(s,e)=>{if(!quitting){e.Cancel=true;chatWindow.Hide();}};
-                input.KeyDown+=(s,e)=>{
-                    if(e.Key!=System.Windows.Input.Key.Enter||!ready||input.Text.Trim().Length==0)return;
-                    e.Handled=true;
-                    SendInput();
-                };
-                input.TextChanged+=delegate {if(ready && input.Text.Length>0)Signal("listen","",3);};
-            }
+            if(chatWindow==null)CreateComposer();
+            if(!chatWindow.IsActive)previousApp=GetForegroundWindow();
+            var area=SystemParameters.WorkArea;
+            chatWindow.Width=Math.Min(620,area.Width-24);
+            chatWindow.Left=area.Left+(area.Width-chatWindow.Width)/2;
+            chatWindow.Top=area.Top+18;
             chatWindow.Show();chatWindow.Activate();
-            if(backend==null||backend.HasExited) StartChat();
+            if(backend==null||backend.HasExited)StartChat();
             input.Focus();
         }
         void SendInput(){
-                    string msg=input.Text.Trim();input.Clear();ready=false;input.IsEnabled=false;answer="";
-                    transcript.AppendText("\nYou: "+msg+"\n");
-                    try {backend.StandardInput.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(msg)));}
-                    catch(IOException){transcript.AppendText("Chat disconnected. Reopen from the tray.\n");}
+            string msg=input.Text.Trim();input.Clear();HideComposer();
+            ResetReply();
+            if(WorkspaceCommand(msg))return;
+            commandOutput.Clear();submitted=true;streamed=false;ready=false;input.IsEnabled=false;
+            try {backend.StandardInput.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(msg)));}
+            catch(IOException){submitted=false;LocalReply("Chat disconnected. Reopen the composer to retry.");}
         }
         void StartChat() {
             if(backend!=null) backend.Dispose();
+            commandOutput.Clear();streamed=false;submitted=false;
             ready=false;input.IsEnabled=false;
             var proc=new Process{StartInfo=new ProcessStartInfo(
                 Environment.GetEnvironmentVariable("MELLOW_PYTHON"),"-u -m mellow.desktop_chat"){
@@ -292,17 +288,22 @@ namespace MellowDesktop {
             int split=line.IndexOf(' '); if(split<0)return;
             string kind=line.Substring(0,split);
             string text=Encoding.UTF8.GetString(Convert.FromBase64String(line.Substring(split+1)));
-            if(kind=="text"){transcript.AppendText(text);transcript.ScrollToEnd();}
-            else if(kind=="ready"){ready=true;input.IsEnabled=true;if(chatWindow.IsActive)input.Focus();}
-            else if(kind=="think"){Signal("think",text,35);}
-            else if(kind=="chunk"){
-                if(answer.Length<120) answer+=text.Substring(0,Math.Min(120-answer.Length,text.Length));
-                if(state!="speak" || (DateTime.UtcNow-lastPaint).TotalMilliseconds>80) {
-                    Signal("speak",answer.Substring(0,Math.Min(answer.Length,120)),5);lastPaint=DateTime.UtcNow;
-                }
+            if(kind=="text"){if(!streamed)commandOutput.Append(text);}
+            else if(kind=="ready"){
+                if(submitted && !streamed && commandOutput.Length>0)LocalReply(commandOutput.ToString().TrimEnd());
+                commandOutput.Clear();submitted=false;ready=true;input.IsEnabled=true;if(chatWindow.IsActive)input.Focus();
             }
-            else if(kind=="done"){Signal(text=="ok"?"speak":"idle",text=="ok"?answer.Substring(0,Math.Min(120,answer.Length)):"",4);}
-            else if(kind=="end"){ready=false;input.IsEnabled=false;Signal("idle","",0);}
+            else if(kind=="think"){streamed=true;commandOutput.Clear();Signal("think",text,35);}
+            else if(kind=="chunk"){AddReply(text);}
+            else if(kind=="done"){
+                if(text!="ok")AddReply("\n[Reply interrupted. Try again.]");
+                finished=true;
+            }
+            else if(kind=="end"){
+                ready=false;input.IsEnabled=false;
+                if(text!="0")LocalReply(commandOutput.Length>0?commandOutput.ToString().Trim():"Chat stopped. Check settings.");
+                commandOutput.Clear();
+            }
         }
     }
 }

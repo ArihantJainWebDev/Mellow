@@ -1,6 +1,6 @@
 # Mellow
 
-A Windows-first personal companion. The current release is a streaming, memory-aware CLI. The [roadmap](docs/ROADMAP.md) covers the future desktop ghost, voice, vision and assistant integrations.
+A Windows-first personal companion. The current release is a streaming, memory-aware CLI. This development branch also includes a Windows desktop ghost, local assignments and opt-in screen observation. See the [desktop workflow](docs/DESKTOP_WORKFLOW.md).
 
 ## Start
 
@@ -42,6 +42,8 @@ Project code uses the [MIT license](LICENSE). Model weights, LM Studio, Groq and
 ## Desktop companion on Windows
 
 Start `python -m mellow.avatar` from this folder. Click the ghost to chat or right-click for controls. Press Ctrl+Alt+M to chat, or open Mellow from the Windows notification area. Right-click its tray icon for move, size, hide, quiet, startup and exit controls. See the [Goal 2 walkthrough and single acceptance pass](docs/GOAL_2_DESKTOP.md).
+
+See [composer controls, assignment examples and local screen commands](docs/DESKTOP_WORKFLOW.md) for the current interaction.
 
 ### Hat trick character study
 

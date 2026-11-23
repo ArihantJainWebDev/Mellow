@@ -17,3 +17,16 @@ class VisionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             analyze("AA==","execute","local")
         model.assert_not_called()
+
+    @patch("mellow.local_vision._request_content")
+    def test_screen_question_stays_in_local_image_request(self, model):
+        model.return_value = json.dumps({"summary": "BLUEBIRD"})
+        result = analyze("AA==", "screen", "fixture", "What word is on the card?")
+        self.assertEqual(result, ("BLUEBIRD", None))
+        packet, port = model.call_args.args
+        self.assertEqual(port, 1234)
+        self.assertEqual(packet["messages"][1]["content"][1]["text"], "What word is on the card?")
+        model.reset_mock()
+        with self.assertRaises(ValueError):
+            analyze("AA==", "screen", "fixture", "x" * 501)
+        model.assert_not_called()
