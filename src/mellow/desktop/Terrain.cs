@@ -23,7 +23,7 @@ namespace MellowDesktop {
     Point targetCenter;
     string pointCaption="Here";
     double sampledAt=-1, reactionAt=-10, reaction,glideAmount,hangAmount;
-    double floorY=double.NaN,perchOffset;
+    double floorY=double.NaN;
     Rect previousLedge;
     int rises;
     double floorSupportReaction(double age){return reaction*Math.Exp(-age*4)*Math.Sin(age*15);}
@@ -57,21 +57,10 @@ namespace MellowDesktop {
             }
         }
         floorY=y;
-        if(perch!=IntPtr.Zero){
-            Rect r=RectFor(perch);
-            if(r.IsEmpty || r.Top<window.Height-FootInset || !window.IsVisible){LeavePerch();return;}
-            Point pos=new Point(Clamp(r.Left+perchOffset,0,SystemParameters.PrimaryScreenWidth-window.Width),r.Top-window.Height+FootInset);
-            if(!previousLedge.IsEmpty && !guiding && (r.Location-previousLedge.Location).Length>20){
-                reactionAt=now;reaction=1;quickDrop=false;
-            }
-            if(!guiding){origin=destination=pos;travel=0;holdUntil=walkTime+3;}
-            else if((pos-destination).Length>5){Travel(pos,walkTime,false);holdUntil=walkTime+travel+.2;}
-            if(guiding && walkTime>=departure+travel){guiding=false;Signal("rest","",2);}
-            previousLedge=r;
-        }
+        if(perch!=IntPtr.Zero) UpdatePerch(now,GetForegroundWindow());
         if(target!=null) RefreshTarget();
         UpdateProgress(now);
-        if(!moving && !guiding && now>=nextDodge && state!="privacy" &&
+        if(!landing && perch==IntPtr.Zero && !moving && !guiding && now>=nextDodge && state!="privacy" &&
            Forms.Control.MouseButtons==Forms.MouseButtons.Left && view.IsMouseOver){
             nextDodge=now+2;LeavePerch();
             var b=Bounds();double side=window.Left<b.Left+b.Width/2?1:-1;
@@ -112,7 +101,7 @@ namespace MellowDesktop {
             else if(now-progressStarted>8 && state=="idle")Signal("rest","",2);
         }catch(ElementNotAvailableException){progressElement=null;}catch(InvalidOperationException){progressElement=null;}catch(COMException){progressElement=null;}
     }
-    void LeavePerch(){perch=IntPtr.Zero;guiding=false;holdUntil=walkTime;previousLedge=Rect.Empty;}
+    void LeavePerch(){perch=IntPtr.Zero;landing=false;guiding=false;holdUntil=walkTime;previousLedge=Rect.Empty;descending=false;}
     void Later(Action work){
         Signal("think","Hover over the target window…",2);
         var delay=new DispatcherTimer{Interval=TimeSpan.FromSeconds(2)};
@@ -137,10 +126,7 @@ namespace MellowDesktop {
             }catch(ElementNotAvailableException){}catch(InvalidOperationException){}catch(COMException){}
             CancelTarget();Signal("offer","Window controls unavailable.",3);return;
         }
-        if(r.Top<window.Height-FootInset){Signal("offer","That title bar has no space above it.",3);return;}
-        CancelTarget();perch=h;perchOffset=Clamp(r.Width*.5-window.Width*.5,0,r.Width);
-        previousLedge=r;guiding=true;Travel(new Point(r.Left+perchOffset,r.Top-window.Height+FootInset),walkTime,false);
-        holdUntil=departure+travel+.2;Signal("guide","",travel+.2);
+        StartPerch(h);
     }
     void CancelTarget(){target=null;closeHandle=IntPtr.Zero;guiding=false;}
     void BeginTarget(){pointCaption="Here";guiding=true;targetCenter=new Point(-10000,-10000);RefreshTarget();}

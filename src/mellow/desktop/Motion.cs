@@ -38,7 +38,8 @@ namespace MellowDesktop {
             var a=SystemParameters.WorkArea;
             // The transparent caption space sits above the model's crown.
             double top=a.Top-(window.Height-size);
-            return new Rect(a.Left,top,Math.Max(0,a.Width-window.Width),Math.Max(0,(double.IsNaN(floorY)?a.Bottom:floorY)-window.Height+FootInset-top));
+            double margin=perch==IntPtr.Zero && !landing?0:Math.Max(0,window.Width*.5-size*.22);
+            return new Rect(a.Left-margin,top,Math.Max(0,a.Width-window.Width+2*margin),Math.Max(0,(double.IsNaN(floorY)?a.Bottom:floorY)-window.Height+FootInset-top));
         }
         double walkDuration, riseDuration;
         int stepCount, swingFoot;
@@ -75,7 +76,9 @@ namespace MellowDesktop {
             nextFootfall=departure+(downFirst+landingTime*walkDuration)*travel/(walkDuration+riseDuration);
             return (swingFoot==1?1:-1)*arc;
         }
-        void Travel(Point next,double clock,bool vertical) {
+        void Travel(Point next,double clock,bool vertical,bool falling=false) {
+            if(landing && !falling) descending=false;
+            landing=falling;
             var b=Bounds();origin=new Point(window.Left,window.Top);
             destination=new Point(Clamp(next.X,b.Left,b.Right),Clamp(next.Y,b.Top,b.Bottom));
             double horizontal=Math.Abs(destination.X-origin.X);
@@ -106,7 +109,8 @@ namespace MellowDesktop {
                 window.Left=Clamp(b.Right-offset,b.Left,b.Right);window.Top=Clamp(b.Bottom-lift,b.Top,b.Bottom);
                 origin=destination=new Point(window.Left,window.Top);placed=true;holdUntil=clock+6;
             }
-            if(!moving && clock>=holdUntil){
+            if(landing) destination.Y=b.Bottom;
+            if(!moving && !landing && perch==IntPtr.Zero && clock>=holdUntil){
                 if(guiding){CancelTarget();pathStage=0;}
                 Point next;
                 descending=false;
@@ -138,17 +142,32 @@ namespace MellowDesktop {
                     origin.Y+(destination.Y-origin.Y)*verticalProgress);
                 onFoot=walkClock>=0 && walkClock<walkDuration && horizontalProgress<1;
             }
-            if(umbrellaRide)pos.X+=Math.Sin(u*4*Math.PI)*Math.Sin(u*Math.PI)*18;
+            if(perch!=IntPtr.Zero && (ledgeLeg==LedgeLeg.Catch || ledgeLeg==LedgeLeg.Mount)){
+                // A quick push off, then a pull over the lip before the soles settle.
+                double pull=Clamp((u-.16)/.84,0,1);
+                double reach=1-Math.Pow(1-pull,2);
+                pos=new Point(origin.X+(destination.X-origin.X)*Ease(pull),
+                    origin.Y+(destination.Y-origin.Y)*reach-size*.065*Math.Sin(Math.PI*pull));
+                onFoot=false;
+            }
+            if(ClimbingFrame && travel>0) {
+                double pulls=Math.Max(1,Math.Round(Math.Abs(destination.Y-origin.Y)/(size*.17)));
+                double phase=Ease(u)*pulls,stroke=phase-Math.Floor(phase);
+                pos.Y=origin.Y+(destination.Y-origin.Y)*(Math.Floor(phase)+Ease(stroke))/pulls;
+            }
+            if(umbrellaRide && !landing)pos.X+=Math.Sin(u*4*Math.PI)*Math.Sin(u*Math.PI)*18;
             pos.X=Clamp(pos.X,b.Left,b.Right);pos.Y=Clamp(pos.Y,b.Top,b.Bottom);
             double blend=.18;
             glideAmount+=((descending && !guiding && u>0 && u<1?1:0)-glideAmount)*blend;
             hangAmount+=((climb && u>=.96 && !guiding?1:0)-hangAmount)*blend;
             if(!moving){window.Left=pos.X;window.Top=pos.Y;}
+            if(landing && u>=1)Land(clock);
             if(guiding && perch==IntPtr.Zero && u>=1 && state!="point")Signal("point",pointCaption,4);
             weight=Math.Sin(Math.PI*u);
             step=onFoot?SetFootprints(horizontalProgress,destination.X-origin.X):
+                ClimbingFrame?Math.Sin(Math.PI*(origin.Y-pos.Y)/(size*.17)):
                 climb?Math.Sin((clock-departure)*8)*weight:0;
-            direction=destination.X<origin.X?-1:1;
+            direction=ClimbingFrame?wallDirection:destination.X<origin.X?-1:1;
         }
     }
 }

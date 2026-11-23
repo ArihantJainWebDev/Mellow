@@ -114,8 +114,8 @@ namespace MellowDesktop {
             menu.Items.Add("Open project checkpoint…",null,delegate {OpenCheckpoint();});
             menu.Items.Add("Perch on a window",null,delegate {Later(delegate {SelectWindow(false);});});
             menu.Items.Add("Watch a progress bar",null,delegate {Later(WatchProgress);});
-            menu.Items.Add("Dismiss / stop watching",null,delegate {dismissed=true;progressElement=null;CancelTarget();Signal("idle","",0);});
-            menu.Items.Add("Leave ledge",null,delegate {LeavePerch();CancelTarget();});
+            menu.Items.Add("Dismiss / stop watching",null,delegate {dismissed=true;progressElement=null;if(perch!=IntPtr.Zero) DropFromPerch();CancelTarget();Signal("idle","",0);});
+            menu.Items.Add("Leave ledge",null,delegate {if(perch!=IntPtr.Zero) DropFromPerch();});
             menu.Items.Add("Close a window…",null,delegate {Later(delegate {SelectWindow(true);});});
             menu.Items.Add("Chat with Mellow",null,delegate {OpenChat();});
             menu.Items.Add("Move ghost (drag it once)",null,delegate {window.Show();LeavePerch();CancelTarget(); moving=true; SetPassive(false);});

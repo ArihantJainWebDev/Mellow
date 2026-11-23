@@ -110,13 +110,13 @@ namespace MellowDesktop {
             NoticeActivity(now);
             SenseTerrain(now);
             bool attending=state=="idle" && now<attentiveUntil;
-            bool advance=guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending);
+            bool advance=landing || perch!=IntPtr.Zero || guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending);
             if(advance) pauseAt=double.NaN;
             else if(double.IsNaN(pauseAt)) pauseAt=onFoot?nextFootfall:walkTime;
             if(!moving) walkTime=advance?walkTime+dt:Math.Min(walkTime+dt,Math.Max(walkTime,pauseAt));
             double stride,weight,direction;
             Navigate(walkTime,out stride,out weight,out direction);
-            if(!onFoot && !guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
+            if(!landing && !onFoot && !guiding && now>=nextDodge && (state!="idle" || attending)) {stride=0;weight=0;}
             ApplyPose(now,dt,attending,stride,weight,direction);
         }
         void ApplyPose(double now,double dt,bool attending,double stride,double weight,double direction) {
@@ -124,10 +124,10 @@ namespace MellowDesktop {
             // A fresh typing burst gets one small acknowledgement, then he settles upright.
             double attentionAge=now-attentionStarted;
             double nod=attending && attentionAge<.6?3*Math.Sin(Math.PI*attentionAge/.6):0;
-            double targetLean=state=="listen"?-8:state=="think"?10:climb?weight*9:nod;
+            double targetLean=state=="listen"?-8:state=="think"?10:ClimbingFrame?wallDirection*weight*9:climb?weight*9:nod;
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
-            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):direction*(onFoot?55*Math.Min(1,weight*4):42*weight);
+            double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):ClimbingFrame?wallDirection*52:direction*(onFoot?55*Math.Min(1,weight*4):42*weight);
             double pivot=targetYaw-yaw;
             yaw+=pivot*blend;
             if(state=="privacy" || Math.Abs(pivot)>70) stride+=Math.Sin(yaw*Math.PI/36)*Math.Min(1,Math.Abs(pivot)/35);
@@ -152,7 +152,10 @@ namespace MellowDesktop {
                 if(state=="privacy")goal=Math.Max(goal,125*Math.Min(1,Math.Abs(yaw)/165));
                 if(onFoot && state=="idle") goal+=16*Math.Max(0,-step);
                 goal+=Math.Abs(spring)*(quickDrop?65:42);
-                if(climb && weight>.02)goal+=(48+37*step)*weight;
+                if(perch!=IntPtr.Zero && (ledgeLeg==LedgeLeg.Mount || ledgeLeg==LedgeLeg.Catch))
+                    goal+=((i==1)==(wallDirection>0)?100:50)*weight;
+                else if(ClimbingFrame)goal+=68+45*step;
+                else if(climb && weight>.02)goal+=(48+37*step)*weight;
                 double angle=i==0?armLeft:armRight;
                 angle+=(goal-angle)*blend;
                 if(i==0)armLeft=angle;else armRight=angle;
@@ -352,6 +355,7 @@ namespace MellowDesktop {
             } else if(verify && time.Elapsed.TotalSeconds>2.6) {
                 if(verifyChat!="1" && !moving){
                     VerifyWalk();
+                    VerifyPerch();
                     // Exercise an actual vertical route through the same interpolator as the timer.
                     var bounds=Bounds();
                     Travel(new Point(window.Left,bounds.Top),0,true);
