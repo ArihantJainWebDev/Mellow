@@ -6,7 +6,7 @@ Launch `python -m mellow.avatar` from the project folder. Exit an older avatar t
 
 Click Mellow or press **Ctrl+Alt+M**. The translucent composer appears at the top center of the primary work area and takes ordinary Windows keyboard focus. **Enter** sends, **Shift+Enter** inserts a newline and **Esc** hides the composer. On send or dismissal Mellow asks Windows to restore the previously focused app. The chat worker is shared with the CLI.
 
-The cloud tracks the ghost and stays inside the primary work area. It measures pages with the actual WPF font and wrap width. Incoming text is revealed progressively. **Reveal** finishes the current page, **Next** advances and **Back** revisits a page. Speaking gestures settle while a completed page waits. **Copy** copies the reply received so far. **Close** dismisses the cloud, including later chunks from the same answer. Sending a new message replaces the cloud.
+The cloud tracks the ghost and stays inside the primary work area. It measures pages with the actual WPF font and wrap width. Incoming text is revealed progressively. **Reveal** finishes the current page, Pages advance after a reading pause. **Next** and **Back** show the destination page immediately. Bold, italic and inline code use styled text. Speaking gestures settle while a completed page waits. **Copy** copies the reply received so far. **Close** dismisses the cloud, including later chunks from the same answer. Sending a new message replaces the cloud.
 
 ## Track assignments
 

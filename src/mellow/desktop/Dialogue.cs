@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Windows.Documents;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -72,7 +74,7 @@ namespace MellowDesktop {
         pageText=PageLabel();
         pageNumber=new TextBlock{VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(4,0,10,0)};
         var controls=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(0,4,0,0)};
-        prevPage=Choice("Back",delegate{if(page>0){page--;visibleEnd=starts[page+1];pageEnd=visibleEnd;PaintPage();}});
+        prevPage=Choice("Back",PreviousPage);
         nextPage=Choice("Next",AdvancePage);
         controls.Children.Add(pageNumber);controls.Children.Add(prevPage);controls.Children.Add(nextPage);
         controls.Children.Add(Choice("⧉",delegate{try{Clipboard.SetText(reply.ToString());}catch(System.Runtime.InteropServices.ExternalException){}}));
@@ -94,13 +96,44 @@ namespace MellowDesktop {
     }
     void ResetReply(){
         dialogueVersion++;DismissReply();showingScreenReply=false;dismissedReply=false;reply.Clear();starts.Clear();starts.Add(0);
-        page=visibleEnd=pageEnd=0;finished=false;nextLetter=0;
+        formattedSource=null;paintedStart=-1;manualPage=false;advanceAt=double.NaN;page=visibleEnd=pageEnd=0;finished=false;nextLetter=0;
     }
     void AddReply(string text){
         if(text.Length==0)return;
         reply.Append(text);
         if(replyPopup==null)CreateReader();
         reading=!dismissedReply;
+    }
+    string formattedSource;
+    MatchCollection marks;
+    int paintedStart=-1,paintedEnd=-1,paintedLength=-1;
+    double advanceAt=double.NaN;
+    bool manualPage;
+    static readonly Regex markup=new Regex(@"(?<tag>`|\*\*|\*|__)(?!\s)(?<content>.+?)(?<!\s)\k<tag>",RegexOptions.Singleline);
+    void Format(TextBlock label,int start,int end){
+        if(formattedSource==null || formattedSource.Length!=reply.Length){
+            formattedSource=reply.ToString();marks=markup.Matches(formattedSource);
+        }
+        label.Inlines.Clear();
+        int cursor=start;
+        foreach(Match mark in marks){
+            if(mark.Index>=end)break;
+            int after=mark.Index+mark.Length;
+            if(after<=start)continue;
+            if(mark.Index>cursor)label.Inlines.Add(new Run(formattedSource.Substring(cursor,mark.Index-cursor)));
+            Group content=mark.Groups["content"];
+            int from=Math.Max(start,content.Index),to=Math.Min(end,content.Index+content.Length);
+            if(to>from){
+                var run=new Run(formattedSource.Substring(from,to-from));
+                string tag=mark.Groups["tag"].Value;
+                if(tag=="`")run.FontFamily=new FontFamily("Consolas");
+                else if(tag.Length==2)run.FontWeight=FontWeights.Bold;
+                else run.FontStyle=FontStyles.Italic;
+                label.Inlines.Add(run);
+            }
+            cursor=Math.Min(after,end);
+        }
+        if(end>cursor)label.Inlines.Add(new Run(formattedSource.Substring(cursor,end-cursor)));
     }
     // Measure with the same font, width, wrapping and line spacing as the actual cloud.
     int FitPage(){
@@ -113,13 +146,20 @@ namespace MellowDesktop {
         var label=PageLabel();int lo=1,hi=letters.Length,fit=0;
         while(lo<=hi){
             int mid=(lo+hi)/2,end=mid==letters.Length?count:letters[mid];
-            label.Text=segment.Substring(0,end);label.Measure(new Size(256,double.PositiveInfinity));
+            Format(label,start,start+end);label.Measure(new Size(256,double.PositiveInfinity));
             if(label.DesiredSize.Height<=80.1){fit=end;lo=mid+1;}else hi=mid-1;
+        }
+        if(start+fit<reply.Length && fit>0 && !char.IsWhiteSpace(reply[start+fit])){
+            int boundary=fit;
+            while(boundary>0 && !char.IsWhiteSpace(segment[boundary-1]))boundary--;
+            if(boundary>0 && segment.Substring(0,boundary).Trim().Length>0)fit=boundary;
         }
         return start+Math.Max(1,fit);
     }
     void PaintPage(){
-        pageText.Text=reply.ToString(starts[page],visibleEnd-starts[page]);
+        if(paintedStart!=starts[page] || paintedEnd!=visibleEnd || paintedLength!=reply.Length){
+            Format(pageText,starts[page],visibleEnd);paintedStart=starts[page];paintedEnd=visibleEnd;paintedLength=reply.Length;
+        }
         pageNumber.Text=(page+1).ToString(CultureInfo.InvariantCulture);
         var paging=page>0 || pageEnd<reply.Length?Visibility.Visible:Visibility.Collapsed;
         pageNumber.Visibility=prevPage.Visibility=nextPage.Visibility=paging;
@@ -127,11 +167,16 @@ namespace MellowDesktop {
         nextPage.IsEnabled=visibleEnd<pageEnd||pageEnd<reply.Length;
         nextPage.Content=visibleEnd<pageEnd?"Reveal":"Next";
     }
+    void PreviousPage(){
+        if(page==0)return;
+        page--;pageEnd=visibleEnd=starts[page+1];manualPage=true;advanceAt=double.NaN;state="read";PaintPage();
+    }
     void AdvancePage(){
+        manualPage=true;advanceAt=double.NaN;
         if(visibleEnd<pageEnd){visibleEnd=pageEnd;}
         else if(pageEnd<reply.Length){
             if(page+1==starts.Count)starts.Add(pageEnd);
-            page++;visibleEnd=starts[page];pageEnd=FitPage();
+            page++;visibleEnd=pageEnd=FitPage();
         }
         state="read";PaintPage();
     }
@@ -155,6 +200,14 @@ namespace MellowDesktop {
         if(measuredLength!=reply.Length || measuredPage!=page || pageEnd==starts[page]){
             pageEnd=FitPage();measuredLength=reply.Length;measuredPage=page;
         }
+        visibleEnd=manualPage?pageEnd:Math.Min(visibleEnd,pageEnd);
+        if(visibleEnd==pageEnd && pageEnd<reply.Length){
+            if(double.IsNaN(advanceAt))advanceAt=now+Math.Max(3,(pageEnd-starts[page])*.065);
+            if(now>=advanceAt){
+                if(page+1==starts.Count)starts.Add(pageEnd);
+                page++;pageEnd=FitPage();visibleEnd=manualPage?pageEnd:starts[page];advanceAt=double.NaN;
+            }
+        }else advanceAt=double.NaN;
         if(visibleEnd<pageEnd && now>=nextLetter){
             string tail=reply.ToString(visibleEnd,Math.Min(12,pageEnd-visibleEnd));
             var glyphs=StringInfo.ParseCombiningCharacters(tail);
@@ -192,6 +245,15 @@ namespace MellowDesktop {
             ghost.AdvancePage();
         }
         if(count<2 || seen.ToString()!=original)throw new InvalidOperationException("Lost reply text");
+        ghost.ResetReply();ghost.AddReply("**Bold** *italic* "+original);ghost.RevealAt(0);ghost.AdvancePage();
+        if(!ghost.pageText.Text.StartsWith("Bold italic ") || ghost.pageText.Inlines.FirstInline.FontWeight!=FontWeights.Bold)
+            throw new InvalidOperationException("Markdown emphasis");
+        if(!char.IsWhiteSpace(ghost.reply[ghost.pageEnd-1]) && !char.IsWhiteSpace(ghost.reply[ghost.pageEnd]))
+            throw new InvalidOperationException("Word split at page break");
+        ghost.RevealAt(1);ghost.RevealAt(100);
+        if(ghost.page!=1)throw new InvalidOperationException("Automatic page advance");
+        ghost.PreviousPage();ghost.AdvancePage();ghost.RevealAt(101);
+        if(ghost.visibleEnd!=ghost.pageEnd || ghost.state=="speak")throw new InvalidOperationException("Replayed page");
         ghost.DismissReply();ghost.AddReply("late chunk");
         if(ghost.reading)throw new InvalidOperationException("Dismissal reopened the cloud");
         if(DesktopIntent("Maybe open notepad later")!="Maybe open notepad later" ||
