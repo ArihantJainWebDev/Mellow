@@ -74,3 +74,7 @@ Prioritize cross-app activity understanding and adaptive behavior. Study music i
 ## November 23, 2026 - Everyday autonomy and visible attention
 
 Resume permitted awareness automatically, remember detailed activity episodes, and move diagnostic controls out of the daily interaction. Study music can adapt within its routine. Restoring a learned workspace gets one confirmation for the whole setup each time it is offered. Visible attention follows real activity even during quiet browsing. See the acceptance scenes in [Product design](PRODUCT_DESIGN.md).
+
+## Local recall and credentials
+
+Owner wants broad cross-app history and welcomes screenshots. Prefer selective local snapshots alongside a searchable timeline. Proposed credential design uses a separate local vault; models can resolve an entry by alias while the vault handles the secret. Storage limits and capture-protection coverage require measurement. [Design and acceptance scenes](PRODUCT_DESIGN.md).
