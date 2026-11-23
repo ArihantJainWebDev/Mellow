@@ -10,7 +10,7 @@ import sys
 from mellow.storage import History
 
 GENERIC = set("""the and for with this that from window app tab new untitled blank welcome home page
-    visual studio code microsoft edge chrome opera firefox browser brave vivaldi chatgpt codex chat
+    visual studio code microsoft edge chrome opera firefox browser brave vivaldi chatgpt codex qoder chat
     google mozilla untitled editor file main clipboard explorer notes project discussion about working desktop terminal
     youtube video user screen looking appears open using title shows active selected""".split())
 CATEGORIES = (
@@ -29,13 +29,22 @@ def contains(text, phrase):
     return re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text, re.I) is not None
 
 
+def observation(scene):
+    vision = scene.get("vision")
+    return vision if isinstance(vision, str) and vision.strip() else ""
+
+
+def scene_evidence(scene):
+    return scene["title"] + " " + observation(scene)
+
+
 def evaluate(path, payload):
     rows = payload.get("scenes", [])[-6:]
     if not rows:
         return {"answer": "I haven’t observed an eligible foreground window yet."}
     current = rows[-1]
     app, title = current["app"], current["title"]
-    vision = current.get("vision", "")
+    vision = observation(current)
     evidence = title + " " + vision
     features = tokens(title) or tokens(vision)
     History(path)
@@ -62,41 +71,77 @@ def evaluate(path, payload):
                 ranked.append((overlap / len(features | saved), learned))
     why = []
     activity = ""
+    corrected = False
+    corroborating = []
     if ranked:
-        best = max(r[0] for r in ranked)
-        winners = {name for score,name in ranked if score == best}
-        if len(winners)==1:
+        best = max(score for score, _ in ranked)
+        winners = {name for score, name in ranked if score == best}
+        if len(winners) == 1:
             activity = winners.pop()
+            corrected = True
             why.append("You previously corrected a matching activity in this app.")
-    projects = sorted(set(profiles + ["mellow"]), key=len, reverse=True)
-    direct = [p for p in projects if contains(evidence,p)]
+    projects = sorted(set(profiles) | {"mellow"}, key=lambda project: (-len(project), project))
+    direct = [project for project in projects if contains(evidence, project)]
     prior = rows[:-1]
-    if not activity and not ranked:
-        categories = [name for name,pattern in CATEGORIES if re.search(pattern,evidence,re.I)]
-        if len(direct)==1:
+    if not ranked:
+        categories = [name for name, pattern in CATEGORIES if re.search(pattern, evidence, re.I)]
+        if len(direct) == 1:
             activity = direct[0]
-        elif not direct and len(categories)==1:
+        elif not direct and len(categories) == 1:
             activity = categories[0]
-        elif not direct and not categories and not tokens(evidence) and app.casefold() in {"code","codex","chatgpt"}:
+        elif not direct and not categories and not tokens(evidence) and app.casefold() in {"code", "codex", "chatgpt", "qoder"}:
             # Only bridge a generic work window across immediately preceding, corroborating scenes.
-            for project in projects:
-                tail = prior[-2:]
-                if len({r["app"].casefold() for r in tail})==2 and all(contains(r["title"]+" "+r.get("vision",""),project) for r in tail):
-                    activity=project
-                    why.append("This is a tentative continuation of the previous two windows.")
+            tail = prior[-2:]
+            if len({row["app"].casefold() for row in tail}) == 2:
+                for project in projects:
+                    if all(contains(scene_evidence(row), project) for row in tail):
+                        activity = project
+                        corroborating = tail
+                        break
+    setup = activity if activity in profiles else ""
+    study = bool(re.search(r"\b(study|studying|college work|coursework)\b", activity))
+    has_title = bool(title.strip())
+    window = f"The {app} window" + (f" “{title}”" if has_title else "")
+    if corrected:
+        headline = f"My best read is {activity}, based on your saved correction."
+        # Keep current evidence visible even when it disagrees with the learned label.
+        headline += (" Visible now: " + vision if vision else
+                     f" {window} is active, but I don’t have screen details.")
+    elif vision:
+        title_supports_task = activity and (contains(title, activity) or any(
+            name == activity and re.search(pattern, title, re.I) for name, pattern in CATEGORIES))
+        headline = (f"Looks like {activity} in “{title}”. {vision}"
+                    if title_supports_task and tokens(title) - tokens(vision) else vision)
+    elif corroborating:
+        headline = (f"You may be continuing {activity} in {app}, based on the previous two windows; "
+                    "I don’t have current screen details.")
+    elif activity:
+        headline = f"{window} suggests {activity}; I don’t have screen details."
+    else:
+        headline = f"{window} is active; I’m unsure of the task without screen details."
+    answer = headline
+    if action == "why":
+        foreground = app + (f" · {title}" if has_title else "")
+        why.append(f"Foreground: {foreground}.")
+        if vision:
+            why.append("I based that on what was visible on screen.")
+        else:
+            source = "the window title and app" if has_title else "the foreground app"
+            why.append(f"Current evidence is limited to {source}; screen details are unavailable.")
+        if activity and not corrected and not corroborating:
+            why.append("Activity label derived from the current title or visible evidence.")
+        observed_at = current.get("observed_at")
+        if isinstance(observed_at, str) and observed_at.strip():
+            why.append("Current capture: " + observed_at.strip() + ".")
+        if activity and not corroborating:
+            for row in reversed(prior):
+                if row["app"].casefold() != app.casefold() and contains(scene_evidence(row), activity):
+                    corroborating = [row]
                     break
-    why.append(f"Foreground: {app} · {title}.")
-    if vision:
-        why.append("Visible content: "+vision)
-    if activity:
-        for row in reversed(prior):
-            if row["app"]!=app and contains(row["title"]+" "+row.get("vision",""),activity):
-                why.append("Earlier: "+row["app"]+" · "+row["title"]+".")
-                break
-    setup = next((p for p in profiles if activity==p), "")
-    study = bool(re.search(r"\b(study|studying|college work|coursework)\b",activity))
-    headline = f"My best read is {activity}." if activity else "I’m unsure what task you’re doing."
-    return {"answer":"\n".join([headline,*why]),"activity":activity,"setup":setup,"study":study}
+        for row in corroborating:
+            why.append(f"Earlier: {row['app']} · {row['title']}.")
+        answer = "\n".join([headline, *why])
+    return {"answer": answer, "activity": activity, "setup": setup, "study": study}
 
 
 def main():

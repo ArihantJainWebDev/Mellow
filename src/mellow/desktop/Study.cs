@@ -19,7 +19,7 @@ namespace MellowDesktop {
         public int session,auto_skip; public long started,ended; public bool active,avoid;
         public string[] mixes;public StudyTrack[] tracks;public StudyDue[] due;public StudyMoment[] moments;
     }
-    public sealed class MediaView {public bool available,playing,changed;public string source,title,artist,message;}
+    public sealed class MediaView {public bool available,unique,playing,changed;public string source,title,artist,message;}
     StudyView study;
     bool studyBusy,mediaBusy,studyCueLatched;
     DateTime cueSince,lastCueTick,nextMediaCheck;
@@ -133,6 +133,17 @@ namespace MellowDesktop {
         }
     }
     async void StudyMedia(string action,bool bubble=true){
+        if(action=="current"){
+            int dialog=dialogueVersion;
+            try{
+                var now=await Task.Run(()=>MediaRequest("current",""));
+                if(quitting || dialog!=dialogueVersion)return;
+                StudyFeedback(!now.available?now.message??"Windows isn’t reporting a media player.":
+                    (now.playing?"Playing: ":"Selected (not playing): ")+(String.IsNullOrEmpty(now.title)?"Unknown title":now.title)+
+                    (String.IsNullOrEmpty(now.artist)?"":" · "+now.artist),bubble);
+            }catch(Exception){if(!quitting && dialog==dialogueVersion)StudyFeedback("Windows could not report the current track.",bubble);}
+            return;
+        }
         if(mediaBusy){if(bubble)StudyFeedback("Checking the player. Try again in a moment.",true);return;}
         mediaBusy=true;int generation=watchGeneration,version=dialogueVersion;
         try{
@@ -144,18 +155,15 @@ namespace MellowDesktop {
             if(action=="sample" && (!study.active || String.IsNullOrEmpty(study.source)))return;
             string source=study.source??"";
             int session=study.session;
-            if(action!="bind" && action!="current" && source.Length==0){StudyFeedback("Start a song, then link the current player in Study desk.",bubble);return;}
+            if(action!="bind" && source.Length==0){StudyFeedback("Start a song, then link the current player in Study desk.",bubble);return;}
             string request=action=="bind"?"current":(action=="sample" || action=="keep")?"inspect":action;
             MediaView m=await Task.Run(()=>MediaRequest(request,source));
             if(quitting || generation!=watchGeneration)return;
             bool show=bubble && version==dialogueVersion;
             if(!m.available){if(action!="sample")StudyFeedback(m.message??"No active player found.",show);return;}
             if(action=="bind"){
+                if(!m.unique){StudyFeedback("Windows is reporting more than one session for that player. Close the extra sessions before linking it.",show);return;}
                 StudyAction("bind",new Dictionary<string,object>{{"source",m.source}},show);return;
-            }
-            if(action=="current"){
-                StudyFeedback((m.playing?"Playing: ":"Selected: ")+(m.title??"Unknown title")+
-                    (String.IsNullOrEmpty(m.artist)?"":" · "+m.artist),show);return;
             }
             if(action=="keep" || (action=="next" && m.changed && study.active)){
                 StudyAction(action=="keep"?"song-keep":"song-skip",
@@ -198,7 +206,7 @@ namespace MellowDesktop {
         }
         var item=current;int generation=watchGeneration,version=dialogueVersion;
         var values=new Dictionary<string,object>{{"name",name},{"app",item.App},{"title",item.Title},
-            {"description",(DateTime.Now-observedAt).TotalSeconds<45?observation:""}};
+            {"description",FreshVision()}};
         if(study!=null && study.active && !String.IsNullOrEmpty(study.source) && !mediaBusy){
             string source=study.source;int session=study.session;
             try{

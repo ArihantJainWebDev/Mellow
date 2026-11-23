@@ -1,6 +1,12 @@
 # Progress tracker
 
-Updated November 23, 2026 (Asia/Kolkata).
+Updated November 24, 2026 (Asia/Kolkata).
+
+## Everyday desktop awareness
+
+Natural activity, screen and current-track questions are handled locally. Screen and activity requests return to the verified app behind the composer, wait for ongoing vision, then check the current window. Activity answers use the visible task and relevant title evidence rather than other processes. When vision fails, Mellow identifies what the title supports and says it could not read the screen. Music questions query Windows without linking a study player or changing playback.
+
+The [desktop walkthrough](DESKTOP_WORKFLOW.md) includes a foreground composer fixture for repeatable checks and a manual check in your own apps. This work does not change avatar animation, add screenshot history, or share desktop content with hosted conversation.
 
 ## Desktop awareness and workspace recall
 

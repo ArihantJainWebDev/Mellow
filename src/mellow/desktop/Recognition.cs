@@ -45,24 +45,27 @@ namespace MellowDesktop {
         autoReadScene=sceneVersion;autoReadVision=visual;
         nextRead=DateTime.UtcNow.AddSeconds(5);Recognize("auto","");
     }
-    string FreshVision(){return (DateTime.Now-observedAt).TotalSeconds<=45?observation:"";}
+    string FreshVision(){return current!=null && (DateTime.UtcNow-current.VisualAt).TotalSeconds<=45?current.Visual??"":"";}
     Dictionary<string,string> Scene(Activity a,string visual){
-        return new Dictionary<string,string>{{"app",a.App},{"title",a.Title},{"vision",visual??""}};
+        return new Dictionary<string,string>{{"app",a.App},{"title",a.Title},{"vision",visual??""},
+            {"observed_at",String.IsNullOrEmpty(visual)?"":a.VisualAt.ToLocalTime().ToString("HH:mm:ss")}};
     }
-    async void Recognize(string action,string label){
+    async void Recognize(string action,string label){await ReadActivity(action,label,"");}
+    async Task ReadActivity(string action,string label,string unavailable){
         bool ambient=action=="auto";
         if(current==null || watchBadge==null){
             if(!ambient)LocalReply("Enable desktop awareness and open Mellow over the activity first.");
             return;
         }
         var anchor=current;
-        if(!anchor.Same(ReadWindow(ambient?GetForegroundWindow():previousApp,true))){
+        bool answering=action=="read" || action=="why";
+        if(!anchor.Same(ReadWindow(ambient || answering?GetForegroundWindow():previousApp,true))){
             if(!ambient)LocalReply("That window changed. Summon me again over the activity.");return;
         }
         var scenes=new List<Dictionary<string,string>>();
         foreach(var item in visits){
             if(Object.ReferenceEquals(item,anchor) || item.At<evidenceStart || (DateTime.Now-item.At).TotalMinutes>4)continue;
-            scenes.Add(Scene(item,item.Visual));
+            scenes.Add(Scene(item,(DateTime.UtcNow-item.VisualAt).TotalMinutes<=4?item.Visual:""));
         }
         scenes.Add(Scene(anchor,FreshVision()));
         int revision=sceneVersion,generation=watchGeneration,dialog=dialogueVersion;
@@ -73,11 +76,13 @@ namespace MellowDesktop {
         try{
             var result=await Task.Run(()=>ReadFramed<ActivityRead>(new ProcessStartInfo(
                 Environment.GetEnvironmentVariable("MELLOW_PYTHON"),"-m mellow.activity"),payload,10000));
-            if(quitting || generation!=watchGeneration || revision!=sceneVersion || epoch!=correctionEpoch)return;
+            if(quitting || generation!=watchGeneration || epoch!=correctionEpoch)return;
+            if(revision!=sceneVersion || (answering && !CaptureFocus(anchor,revision))){
+                if(answering && dialog==dialogueVersion)LocalReply("The focused window changed. I discarded that activity answer.");return;
+            }
             if(!ambient){
                 if(dialog!=dialogueVersion)return;
-                string others=action=="read"?BackgroundApps(anchor):"";
-                LocalReply(result.answer+others);showingScreenReply=true;return;
+                LocalReply(result.answer+(unavailable.Length>0?"\n"+unavailable:""));showingScreenReply=true;return;
             }
             if(quiet || !anchor.Same(ReadWindow(GetForegroundWindow(),true)))return;
             if(String.IsNullOrEmpty(result.setup) && (!result.study || (study!=null && study.active))){ClearActivityOffer();return;}
@@ -99,12 +104,6 @@ namespace MellowDesktop {
             if(text.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)){
                 Recognize(prefix.StartsWith("forget")?"forget":"correct",text.Substring(prefix.Length).Trim());return true;
             }
-        }
-        if(text.Equals("why do you think that",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("why do you think i'm doing that",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what am i doing, and what makes you think that",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what am i doing, and why",StringComparison.OrdinalIgnoreCase)){
-            Recognize("read","");return true;
         }
         return false;
     }

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.Globalization;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -41,13 +39,11 @@ namespace MellowDesktop {
             if(quitting)return;
             byte[] bytes=CaptureArea(area);
             window.Show();Signal("think","Checking your selection locally…",35);
-            string[] lines=await Task.Run(()=>AskVision(bytes,task));
+            var result=await Task.Run(()=>AskVision(bytes,task));
             if(quitting)return;
-            string answer=System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lines[0]));
-            if(lines.Length>1){
-                var coord=lines[1].Split(' ');
-                var pt=new Point(area.X+area.Width*double.Parse(coord[0],CultureInfo.InvariantCulture),
-                    area.Y+area.Height*double.Parse(coord[1],CultureInfo.InvariantCulture));
+            string answer=result.summary;
+            if(result.x.HasValue && result.y.HasValue){
+                var pt=new Point(area.X+area.Width*result.x.Value,area.Y+area.Height*result.y.Value);
                 pt=PresentationSource.FromVisual(window).CompositionTarget.TransformFromDevice.Transform(pt);
                 CancelTarget();perch=IntPtr.Zero;guiding=true;pointCaption=answer;pointingLeft=pt.X<SystemParameters.PrimaryScreenWidth/2;
                 Travel(new Point(pt.X-window.Width/2+(pointingLeft?1:-1)*size*.36,pt.Y-window.Height+size*.47),walkTime,false);
@@ -58,18 +54,13 @@ namespace MellowDesktop {
         } catch(Exception){if(!quitting)Signal("offer","Local vision failed. Check the LM Studio vision model.",5);}
         finally{inspecting=false;if(!quitting)window.Show();}
     }
-    static string[] AskVision(byte[] bytes,string task,string question=""){
+    public sealed class VisionRead {public string summary,observation;public double? x,y;}
+    static VisionRead AskVision(byte[] bytes,string task,string question=""){
         var model=Environment.GetEnvironmentVariable("MELLOW_VISION_MODEL")??"qwen3-vl-4b-instruct";
         if(!System.Text.RegularExpressions.Regex.IsMatch(model,@"^[a-zA-Z0-9_./:-]+$"))throw new ArgumentException();
         var info=new ProcessStartInfo(Environment.GetEnvironmentVariable("MELLOW_PYTHON"),
-            "-m mellow.local_vision "+task+" "+model){UseShellExecute=false,RedirectStandardInput=true,
-            RedirectStandardOutput=true,CreateNoWindow=true};
-        using(var proc=Process.Start(info)){
-            proc.StandardInput.WriteLine(Convert.ToBase64String(bytes));proc.StandardInput.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(question)));proc.StandardInput.Close();
-            var text=proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit();if(proc.ExitCode!=0)throw new IOException();
-            return text.Trim().Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries);
-        }
+            "-m mellow.local_vision "+task+" "+model);
+        return ReadFramed<VisionRead>(info,Convert.ToBase64String(bytes)+"\n"+EncodeField(question),35000);
     }
  }
 }

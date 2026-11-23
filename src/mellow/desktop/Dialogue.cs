@@ -15,6 +15,9 @@ namespace MellowDesktop {
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     static extern bool SetForegroundWindow(IntPtr handle);
     IntPtr previousApp;
+    Activity composerTarget;
+    bool ComposerFocused {get{return chatWindow!=null && chatWindow.IsVisible &&
+        GetForegroundWindow()==new System.Windows.Interop.WindowInteropHelper(chatWindow).Handle;}}
     Popup replyPopup;
     TextBlock pageText,pageNumber;
     Button nextPage,prevPage;
@@ -272,6 +275,16 @@ namespace MellowDesktop {
             DesktopIntent("Open Calculator")!="/open calculator" ||
             DesktopIntent("Look at my screen: Which error?")!="/screen ask Which error?")
             throw new InvalidOperationException("Explicit desktop intent");
+        foreach(string phrase in new[]{"What am I doing right now.","  WHAT  I AM currently doing?!  ",
+            "Please tell me what am I working on right now please."})
+            if(DesktopIntent(phrase)!="/activity")throw new InvalidOperationException("Activity wording: "+phrase);
+        foreach(string phrase in new[]{"What's playing?","What am I listening to right now.","what i ma listening to", "What music am I listening to?!"})
+            if(DesktopIntent(phrase)!="/music current")throw new InvalidOperationException("Media wording: "+phrase);
+        foreach(string phrase in new[]{"Can you see my screen.","What's on my screen?","What do you see on my screen?!"})
+            if(!DesktopIntent(phrase).StartsWith("/screen ask ",StringComparison.Ordinal))throw new InvalidOperationException("Screen wording: "+phrase);
+        foreach(string phrase in new[]{"Maybe open notepad later","Why is screen sharing risky?","What should I be working on?",
+            "If I ask what am I doing, can you answer?","What is the best way to capture what's on my screen?","Would you skip this song?"})
+            if(DesktopIntent(phrase)!=phrase)throw new InvalidOperationException("Unexpected local action: "+phrase);
         Uri url;
         if(!WebAddress("https://example.com/",out url)||WebAddress("file:///C:/test",out url)||WebAddress("https://user:pass@example.com",out url))
             throw new InvalidOperationException("Browser URL handling");

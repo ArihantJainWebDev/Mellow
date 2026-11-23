@@ -1,4 +1,4 @@
-param([switch]$VerifyStudy, [switch]$VerifyScreen, [switch]$VerifyInteraction, [switch]$Classic, [switch]$HatTrick, [switch]$Verify, [switch]$PoseSheet, [switch]$Offscreen, [string]$Preview)
+param([switch]$VerifyStudy, [switch]$VerifyScreen, [switch]$VerifyLiveAwareness, [switch]$VerifyInteraction, [switch]$Classic, [switch]$HatTrick, [switch]$Verify, [switch]$PoseSheet, [switch]$Offscreen, [string]$Preview)
 $ErrorActionPreference = 'Stop'
 $env:MELLOW_DESKTOP_DIR = $PSScriptRoot
 Add-Type -AssemblyName PresentationCore,PresentationFramework,WindowsBase,System.Xaml,System.Web.Extensions,System.Windows.Forms,System.Drawing,UIAutomationClient,UIAutomationTypes
@@ -26,6 +26,10 @@ if ($VerifyStudy) {
 }
 if ($VerifyScreen) {
     [MellowDesktop.Ghost]::VerifyScreen()
+    return
+}
+if ($VerifyLiveAwareness) {
+    [MellowDesktop.Ghost]::VerifyLiveAwareness()
     return
 }
 if ($VerifyInteraction) {

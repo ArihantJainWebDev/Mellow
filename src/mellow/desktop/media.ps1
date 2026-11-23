@@ -23,14 +23,21 @@ try {
     $source = if ($encoded) {[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded))} else {''}
     if ($Action -eq 'current') {
         $session = $manager.GetCurrentSession()
-        if ($null -ne $session) { $source = $session.SourceAppUserModelId }
+        if ($null -eq $session) {
+            Finish-Media @{available=$false;message='Windows is not reporting a current media session.'}
+            exit 0
+        }
+        $source = $session.SourceAppUserModelId
     }
     $matchingSessions = @($manager.GetSessions() | Where-Object { $_.SourceAppUserModelId -ceq $source })
-    if (!$source -or $matchingSessions.Count -ne 1) {
-        Finish-Media @{available=$false;message='No unique Windows media session for that player.'}
-        exit 0
+    $unique = [bool]($source -and $matchingSessions.Count -eq 1)
+    if ($Action -ne 'current') {
+        if (!$unique) {
+            Finish-Media @{available=$false;message='No unique Windows media session for that player.'}
+            exit 0
+        }
+        $session = $matchingSessions[0]
     }
-    $session = $matchingSessions[0]
     $properties = Await-Result ($session.TryGetMediaPropertiesAsync()) $metadataType
     $expectedLine=[Console]::ReadLine()
     $expectedArtistLine=[Console]::ReadLine()
@@ -47,7 +54,7 @@ try {
     if ($Action -eq 'play') { $changed = Await-Result ($session.TryPlayAsync()) ([bool]) }
     if ($Action -eq 'pause') { $changed = Await-Result ($session.TryPauseAsync()) ([bool]) }
     if ($Action -eq 'next') { $changed = Await-Result ($session.TrySkipNextAsync()) ([bool]) }
-    Finish-Media @{available=$true;source=$source;title=$properties.Title;artist=$properties.Artist;
+    Finish-Media @{available=$true;unique=$unique;source=$source;title=$properties.Title;artist=$properties.Artist;
         playing=($session.GetPlaybackInfo().PlaybackStatus.ToString() -eq 'Playing');changed=$changed}
 } catch {
     Finish-Media @{available=$false;message='Windows media integration is unavailable.'}

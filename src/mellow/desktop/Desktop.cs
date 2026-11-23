@@ -282,11 +282,11 @@ namespace MellowDesktop {
         void OpenChat() {
             if(!window.IsVisible) window.Show();
             if(chatWindow==null)CreateComposer();
-            if(!chatWindow.IsActive){
+            if(!ComposerFocused){
                 previousApp=GetForegroundWindow();
+                composerTarget=CanObserveFocus()?ReadWindow(previousApp,true):null;
                 if(watchBadge!=null){
-                    var last=CanObserveFocus()?ReadWindow(previousApp,true):null;
-                    if(last!=null)Track(last);else InvalidateScene();
+                    if(composerTarget!=null)Track(composerTarget);else InvalidateScene();
                 }
             }
             var area=SystemParameters.WorkArea;
@@ -294,7 +294,8 @@ namespace MellowDesktop {
             chatWindow.Left=area.Left+(area.Width-chatWindow.Width)/2;
             chatWindow.Top=area.Top+18;
             chatWindow.Show();chatWindow.Activate();
-            if(backend==null||backend.HasExited)StartChat();
+            if(!offscreenReview){if(backend==null||backend.HasExited)StartChat();}
+            else {ready=true;input.IsEnabled=true;}
             input.Focus();
         }
         void SendInput(){
@@ -303,10 +304,9 @@ namespace MellowDesktop {
             proposed=null;
             if(intent.StartsWith("/browser ",StringComparison.OrdinalIgnoreCase) ||
                intent.StartsWith("/screen watch",StringComparison.OrdinalIgnoreCase) ||
-               intent.StartsWith("/screen ask ",StringComparison.OrdinalIgnoreCase) ||
                intent.StartsWith("/back-to",StringComparison.OrdinalIgnoreCase) || intent=="/restore-setup" || intent=="/point" || intent=="/close-window")HideComposer();
             ResetReply();
-            if(WorkspaceCommand(msg))return;
+            if(WorkspaceCommand(intent))return;
             commandOutput.Clear();submitted=true;streamed=false;ready=false;input.IsEnabled=false;
             try {backend.StandardInput.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(msg)));}
             catch(IOException){submitted=false;LocalReply("Chat disconnected. Reopen the composer to retry.");}

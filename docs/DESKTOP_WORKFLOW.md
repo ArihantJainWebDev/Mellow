@@ -38,8 +38,9 @@ Start a vision-capable model in LM Studio and enable its local server on port 12
 | In the composer | Effect |
 | --- | --- |
 | `/screen watch` | Shows the Recent/Stop badge. Window changes are checked every second. After a window settles, its visible screen area can be sampled locally; subsequent checks run at roughly 12-second intervals, with one inference at a time. |
-| `/screen` | Shows the latest description and its capture time or the current availability. |
-| `/screen ask What error is visible?` | Requests a fresh local image answer while observation is on. |
+| `/screen` | Requests a fresh local description of the focused app. |
+| `/screen status` | Shows the last fresh description and its capture time, or current availability. |
+| `/screen ask What error is visible?` | Answers a specific question using a fresh local screen check while observation is on. |
 | `/screen stop` | Stops new captures and clears the cached description. Late results are discarded. The badge also has a Stop button. |
 | `/open https://example.com`, `/search compiler docs` | Opens an HTTPS address in the default browser or sends the search terms to Google. |
 | `/browser back`, `/browser forward`, `/browser refresh` | Requests navigation from the foreground supported browser. Open the composer with the browser focused. |
@@ -49,20 +50,20 @@ Start a vision-capable model in LM Studio and enable its local server on port 12
 
 You can also type “Start watching my screen”, “Look at my screen: which error is visible?”, “Stop watching my screen”, “Open calculator”, “Search the web for compiler docs”, “Go back in my browser”, or “Refresh this tab”.
 
-Everyday wording also works. Ask “What am I doing right now?” to inspect local activity evidence, “Can you see my screen?” for one fresh local description, and “What am I listening to?” to inspect a linked Windows media player. A screen question temporarily hides the composer so Mellow can inspect the app that was focused before you opened chat.
+Ask “What am I doing right now?” for a task-level read, “Can you see my screen?” for a local description, or “What am I listening to?” for the track selected by Windows. A track question works without enabling awareness or linking a study player, and never changes playback. To answer a screen or activity question, Mellow hides the composer, verifies that Windows returned to the app you summoned it over, and checks the screen locally. If another check is already running, the question waits. If vision is unavailable, the activity answer says what it can tell from the window title.
 
-Awareness starts off on first use. After enabling it once, it resumes on ordinary relaunch. Stop persists across restarts and clears the temporary activity trail. The focus check pauses new captures for the composer and password fields or unknown focus reported by Windows accessibility. It cannot identify sensitive content elsewhere on the screen. Use **Stop** before opening confidential material. Locking the Windows session stops the watcher. Raw images travel in memory to the local model. Screen descriptions stay out of Groq chat, SQLite, and exports. The screen result cannot trigger actions. Navigation, searches and app launches require an explicit command. The browser and LM Studio have their own settings and histories.
+Awareness starts off on first use. After enabling it once, it resumes on ordinary relaunch. Stop persists across restarts and clears the temporary trail. The watcher does not capture Mellow’s composer or a focus that Windows accessibility reports as protected or unknown. If the window changes during a check, Mellow discards the answer. The focus check cannot identify sensitive content elsewhere in the captured area: use **Stop** before opening confidential material. Locking the session stops the watcher. Screenshots and ordinary awareness replies stay local and out of chat history. An explicitly saved moment or activity correction can retain selected context locally. Screen content does not authorize actions. The browser and LM Studio have their own settings and histories.
 
 ## A project workspace that remembers its windows
 
 Right-click the ghost and choose **Enable desktop awareness** once. While idle, Mellow glances toward the active window or a recently moved pointer inside it. The **Recent** badge button shows the last five observed windows. The local trail contains at most 48 transitions and is cleared on Stop or exit.
 
-1. Spend a couple of seconds in each of three ordinary windows, for example Opera, VS Code and a chat. Press Ctrl+Alt+M over the last one and ask **What am I doing?** The foreground caption and other open apps are labeled separately. Local vision adds a dated description when available.
+1. Spend a couple of seconds in each of three ordinary windows, for example Opera, VS Code and a chat. Press Ctrl+Alt+M over the last one and ask **What am I doing?** The reply focuses on the active task, not background processes. Ask **What apps do I have open?** separately if you want an inventory.
 2. Say **remember my setup**. This explicitly saves up to three recently visited, still-open windows by application and title. Exact titles are personal data in the local SQLite export. A new save replaces the previous one; database reset removes it.
 3. Exit and restart Mellow from the same folder. Minimize one of those windows, then say **restore my setup**. Review the list and choose **Restore setup** or **Skip**. Only uniquely matching live windows are eligible. Closed windows, changed tab titles and ambiguous matches are reported. This version does not relaunch missing apps or reconstruct URLs.
 4. For an untrained example, visit windows A, B, C, A, B, C, A with stable titles, dwelling long enough to be observed. While Mellow is idle he can offer that setup. If a reply is already on screen, the badge shows **Workspace?** so you can inspect the offer without interrupting it. No window moves until you confirm. This narrow recognition rule operates within the current observation session.
 
-**Take me back** returns to the preceding eligible window. **Take me back to VS Code** selects the most recent matching editor window. Mellow rechecks its identity before asking Windows to focus it. **Where was I?** brings back the recent trail without sending titles to Groq. A minimized app can appear under other open apps; its presence alone does not establish that it was used. Available titles and password-field detection depend on Windows accessibility. Use Stop when a window must be excluded.
+**Take me back** returns to the preceding eligible window. **Take me back to VS Code** selects the most recent matching editor window. Mellow rechecks its identity before asking Windows to focus it. **Where was I?** brings back the recent trail without sending titles to Groq. An app can be open without being part of your current task. Available titles and password-field detection depend on Windows accessibility. Use Stop when a window must be excluded.
 
 ## Repeat the checks
 
@@ -70,9 +71,10 @@ Right-click the ghost and choose **Enable desktop awareness** once. While idle, 
 python -m unittest discover -s tests -q
 python -m mellow.avatar -VerifyInteraction
 python -m mellow.avatar -VerifyScreen
+python tools/verify_study.py --awareness
 ```
 
-The first command uses disposable data, including assignments shared across three desktop-worker processes. The second exercises production WPF text measurement and reply state offscreen. The last sends a generated quiz card to the installed local model. No personal screenshot is needed for any of these checks. For the final hands-on check, type in an editor, summon Mellow, submit a long reply, use Next and Back, and check that typing returns to the editor. Try browser navigation on two ordinary pages and use the badge to stop observation.
+The first command runs isolated tests. The second checks native routing, reply state and WPF text measurement. The third sends a generated card to the local model. The fourth briefly uses foreground focus to exercise the actual WPF composer over a disposable quiz window, including a focus switch, protected focus, vision failure, and a read-only Windows media query. Leave those test windows in front while it runs; if Windows does not activate the quiz, click it when it opens. For a hands-on check, restart Mellow, focus an ordinary app, and ask what you’re doing, what Mellow can see, and what’s playing. Try another app and check that the answer changes with it.
 
 ### Activity recognition
 

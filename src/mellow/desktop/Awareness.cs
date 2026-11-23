@@ -20,7 +20,8 @@ namespace MellowDesktop {
         internal IntPtr Handle;
         internal uint Pid;
         internal string App, Title, Address, Visual;
-        internal DateTime At;
+        internal DateTime At,VisualAt;
+        internal string ImageDigest="";
         internal string Label {get{return FriendlyApp(App)+(Title.Length==0?"":" · "+Title);}}
         internal bool Same(Activity other){
             return other!=null && Handle==other.Handle && Pid==other.Pid && Title==other.Title;
@@ -58,7 +59,9 @@ namespace MellowDesktop {
     static readonly int ownPid=CurrentPid();
     static int CurrentPid(){using(var self=Process.GetCurrentProcess())return self.Id;}
     void InvalidateScene(){
-        evidenceStart=DateTime.Now;ClearActivityOffer();current=null;observation="";sceneVersion++;aim=aimY=0;
+        evidenceStart=DateTime.Now;ClearActivityOffer();
+        foreach(var visit in visits){visit.Visual="";visit.ImageDigest="";visit.VisualAt=DateTime.MinValue;}
+        current=null;screenIssue="";sceneVersion++;aim=aimY=0;
     }
     void ClearActivity(){
         InvalidateScene();visits.Clear();proposed=waitingSetup=null;lastOffer="";
@@ -66,8 +69,8 @@ namespace MellowDesktop {
     }
     void Track(Activity item){
         if(item.Same(current))return;
-        ClearActivityOffer();lastChange=DateTime.UtcNow;current=item;sceneVersion++;observation="";nextSnapshot=DateTime.UtcNow.AddSeconds(2);
-        if(visits.Count>0 && item.Same(visits[visits.Count-1]))return;
+        ClearActivityOffer();lastChange=DateTime.UtcNow;current=item;screenIssue="";sceneVersion++;nextSnapshot=DateTime.UtcNow.AddSeconds(2);
+        if(visits.Count>0 && item.Same(visits[visits.Count-1])){visits[visits.Count-1]=item;return;}
         visits.Add(item);
         if(visits.Count>48)visits.RemoveAt(0);
     }
@@ -87,7 +90,7 @@ namespace MellowDesktop {
         string key=setup[0].Label+"|"+setup[1].Label+"|"+setup[2].Label;
         if(key==lastOffer)return;
         lastOffer=key;
-        if(reading || quiet || state!="idle"){
+        if(reading || quiet || state!="idle" || ScreenQuestionPending){
             waitingSetup=setup;offerExpires=DateTime.UtcNow.AddMinutes(2);
             if(setupHint!=null)setupHint.Visibility=Visibility.Visible;
             return;
@@ -102,17 +105,24 @@ namespace MellowDesktop {
         if(proposed!=null && DateTime.UtcNow>=offerExpires){
             proposed=null;if(reading && dialogueVersion==offerDialogue)DismissReply();
         }
-        if(inspecting || (studyWindow!=null && studyWindow.IsActive) || (chatWindow!=null && chatWindow.IsActive)){
-            aim=aimY=0;return;
+        if(ComposerFocused){
+            aim=Clamp((chatWindow.Left+chatWindow.Width/2-window.Left-window.Width/2)/Math.Max(1,SystemParameters.PrimaryScreenWidth*.32),-1,1);
+            aimY=Clamp((window.Top+window.Height-size*.65-chatWindow.Top-chatWindow.ActualHeight/2)/Math.Max(1,SystemParameters.PrimaryScreenHeight*.55),-1,1);
+            watchLabel.Text="Screen on · chat open (capture paused)";return;
+        }
+        if(inspecting || (studyWindow!=null && studyWindow.IsVisible &&
+           GetForegroundWindow()==new System.Windows.Interop.WindowInteropHelper(studyWindow).Handle)){
+            aim=aimY=0;watchLabel.Text="Screen on · Mellow window (capture paused)";return;
         }
         if(!CanObserveFocus()){
             if(current!=null)InvalidateScene();
-            watchLabel.Text="Screen paused · focus";return;
+            watchLabel.Text="Screen paused · protected or unavailable focus";return;
         }
         var item=ReadWindow(GetForegroundWindow(),true);
         if(item==null){if(current!=null)InvalidateScene();return;}
         bool changed=!item.Same(current);
-        Track(item);PollStudy(item,DateTime.UtcNow);ConsiderRecognition();
+        Track(item);
+        if(!ScreenQuestionPending){PollStudy(item,DateTime.UtcNow);ConsiderRecognition();}
         Rect r=RectFor(item.Handle);
         if(!r.IsEmpty){
             var focus=new Point(r.Left+r.Width/2,r.Top+r.Height/2);
@@ -126,22 +136,28 @@ namespace MellowDesktop {
             aim=Clamp((focus.X-window.Left-window.Width/2)/Math.Max(1,SystemParameters.PrimaryScreenWidth*.32),-1,1);
             aimY=Clamp((window.Top+window.Height-size*.65-focus.Y)/Math.Max(1,SystemParameters.PrimaryScreenHeight*.55),-1,1);
         }
-        if(changed){watchLabel.Text="Noticing "+item.App;OfferSetup();}
-        else if(!sampling && observation.Length==0 && DateTime.UtcNow<nextSnapshot && watchLabel.Text=="Screen paused · focus")
-            watchLabel.Text="Noticing "+item.App;
-        if(!sampling && DateTime.UtcNow>=nextSnapshot){
+        if(changed){watchLabel.Text="Noticing "+FriendlyApp(item.App);OfferSetup();}
+        else if(!sampling && screenIssue.Length==0 && FreshVision().Length==0 && DateTime.UtcNow<nextSnapshot)
+            watchLabel.Text="Noticing "+FriendlyApp(item.App)+" · no fresh screen description";
+        if(!sampling && !ScreenQuestionPending && DateTime.UtcNow>=nextSnapshot){
             nextSnapshot=DateTime.UtcNow.AddSeconds(12);SampleScreen();
         }
     }
+    static bool MeaningfulApp(Activity item){
+        return item!=null && item.Title.Length>0 && Array.IndexOf(new[]{"textinputhost","nahimic3","shellexperiencehost",
+            "startmenuexperiencehost","searchhost","searchapp","widgetservice","widgets"},item.App.ToLowerInvariant())<0;
+    }
     string BackgroundApps(Activity foreground){
         var names=new List<string>();var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if(MeaningfulApp(foreground)){seen.Add(foreground.App);names.Add(FriendlyApp(foreground.App));}
         EnumWindows(delegate(IntPtr h,IntPtr unused){
-            if(h==foreground.Handle || !IsWindowVisible(h) || (GetWindowLong(h,-20)&0x80)!=0)return true;
-            var other=ReadWindow(h,false);
-            if(other!=null && other.App!=foreground.App && seen.Add(other.App))names.Add(other.App);
-            return names.Count<12;
+            if(!IsWindowVisible(h) || (GetWindowLong(h,-20)&0x80)!=0)return true;
+            var other=ReadWindow(h,true);
+            if(MeaningfulApp(other) && seen.Add(other.App))
+                names.Add(other.App.Equals("ApplicationFrameHost",StringComparison.OrdinalIgnoreCase)?other.Title:FriendlyApp(other.App));
+            return names.Count<8;
         },IntPtr.Zero);
-        return names.Count==0?"":"\nOther open apps: "+String.Join(", ",names.ToArray())+".";
+        return names.Count==0?"I can’t identify any ordinary app windows.":"Open apps (presence, not proof of activity): "+String.Join(", ",names.ToArray())+".";
     }
     void DescribeActivity(bool recent){
         if(watchBadge==null){LocalReply("Desktop awareness is off. Say “start watching my screen” to enable it.");return;}
@@ -151,7 +167,7 @@ namespace MellowDesktop {
             for(int i=Math.Max(0,visits.Count-5);i<visits.Count;i++)lines.Add(visits[i].At.ToString("HH:mm")+"  "+visits[i].Label);
             LocalReply("Your recent windows\n"+String.Join("\n",lines.ToArray()));showingScreenReply=true;return;
         }
-        Recognize("read","");
+        AnswerScreen("",true);
     }
     bool setupIO;
     int offerDialogue;
@@ -232,6 +248,11 @@ namespace MellowDesktop {
             case "opera":return "Opera";
             case "chrome":return "Chrome";
             case "chatgpt":return "ChatGPT";
+            case "qoder":return "Qoder";
+            case "firefox":return "Firefox";
+            case "brave":return "Brave";
+            case "explorer":return "File Explorer";
+            case "systemsettings":return "Settings";
             default:return app;
         }
     }
@@ -288,8 +309,17 @@ namespace MellowDesktop {
         ghost.Track(apps[0]);
         if(ghost.RepeatedSetup()==null || SameCapture(apps[0],apps[1],1,1) || SameCapture(apps[0],apps[0],1,3))
             throw new InvalidOperationException("Workspace sequence or stale image guard");
+        ghost.current.Visual="A synthetic project task";ghost.current.VisualAt=DateTime.UtcNow;
+        if(ghost.FreshVision().Length==0)throw new InvalidOperationException("Missing current observation");
+        ghost.current.VisualAt=DateTime.UtcNow.AddSeconds(-46);
+        if(ghost.FreshVision().Length>0)throw new InvalidOperationException("Old observation treated as current");
+        ghost.current.VisualAt=DateTime.UtcNow;ghost.Track(apps[1]);
+        if(ghost.FreshVision().Length>0)throw new InvalidOperationException("Observation crossed window identities");
+        if(MeaningfulApp(new Activity{App="TextInputHost",Title="Helper"}) ||
+            MeaningfulApp(new Activity{App="Nahimic3",Title="Audio"}) ||
+            !MeaningfulApp(new Activity{App="qoder",Title="Qoder"}))throw new InvalidOperationException("Helper filtering");
         ghost.ClearActivity();
-        if(ghost.visits.Count!=0 || ghost.current!=null)throw new InvalidOperationException("Activity retained after Stop");
+        if(ghost.visits.Count!=0 || ghost.current!=null || apps[0].Visual.Length>0)throw new InvalidOperationException("Activity retained after Stop");
         // Check the native identity path with a disposable window outside the virtual desktop.
         var fixture=TestLedge(new Rect(SystemParameters.VirtualScreenLeft-200,SystemParameters.VirtualScreenTop-200,80,50));
         try{

@@ -16,15 +16,48 @@ from mellow.study import handle
 from mellow.tasks import task_command
 
 
+def verify_live_awareness(root, cmd, directory):
+    with subprocess.Popen([*cmd, str(root / "tools/fixture_toolbar.ps1"), "-Awareness"], cwd=directory,
+                          stdout=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW) as probe:
+        lines = Queue()
+        def collect_handles():
+            lines.put(probe.stdout.readline())
+            lines.put(probe.stdout.readline())
+        Thread(target=collect_handles, daemon=True).start()
+        handle = 0
+        try:
+            handle = int(lines.get(timeout=12))
+            protected = int(lines.get(timeout=12))
+            done = subprocess.run([*cmd, str(root / "src/mellow/desktop/avatar.ps1"), "-VerifyLiveAwareness"],
+                                  cwd=directory, timeout=160, text=True, errors="replace",
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NO_WINDOW,
+                                  env=dict(os.environ, MELLOW_PYTHON=sys.executable, MELLOW_FIXTURE_HWND=str(handle),
+                                           MELLOW_PROTECTED_HWND=str(protected), PYTHONDONTWRITEBYTECODE="1"))
+            print(done.stdout, end="")
+            done.check_returncode()
+        finally:
+            if handle and probe.poll() is None:
+                ctypes.windll.user32.PostMessageW(ctypes.c_void_p(handle), 0x10, 0, 0)
+            try:
+                probe.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                probe.terminate()
+                probe.wait()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--preview", type=Path, help="Write the production dashboard to a PNG.")
+    parser.add_argument("--awareness", action="store_true", help="Run foreground composer checks on a synthetic quiz window.")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     if sys.platform != "win32":
         parser.error("This check exercises the Windows desktop.")
     cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-File"]
     with tempfile.TemporaryDirectory() as directory:
+        if args.awareness:
+            verify_live_awareness(root, cmd, directory)
+            return
         db_path = Path(directory) / "data/history.db"
         history = History(db_path)
         due = (date.today() + timedelta(days=2)).isoformat()

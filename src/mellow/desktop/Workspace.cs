@@ -18,12 +18,14 @@ namespace MellowDesktop {
     DispatcherTimer watchTimer;
     int watchGeneration;
     bool sampling,showingScreenReply;
-    string observation="",previousImage="";
-    DateTime observedAt;
+    Task<VisionRead> screenCheck;
+    int screenQuestion=-1;
+    string screenIssue="";
+    bool ScreenQuestionPending {get{return screenQuestion==dialogueVersion;}}
 
     void StartWatching(){
         if(watchBadge!=null){LocalReply("Primary screen observation is already on.");return;}
-        watchGeneration++;observation="";ClearActivity();
+        watchGeneration++;screenIssue="";ClearActivity();
         var bar=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(8,2,4,2)};
         watchLabel=new TextBlock{Text="Screen on · local",VerticalAlignment=VerticalAlignment.Center};
         bar.Children.Add(watchLabel);InitActivityOffer(bar);
@@ -45,7 +47,7 @@ namespace MellowDesktop {
             SystemEvents.SessionSwitch-=OnSessionChange;
         };
         watchBadge.Show();StudyAction("status",null,false);
-        SaveAwarenessPreference(1);
+        if(!offscreenReview)SaveAwarenessPreference(1);
         SystemEvents.SessionSwitch+=OnSessionChange;
         watchTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
         watchTimer.Tick+=delegate{PollActivity();PollStudyMusic(DateTime.UtcNow);};watchTimer.Start();PollActivity();
@@ -60,58 +62,103 @@ namespace MellowDesktop {
         catch(UnauthorizedAccessException){}catch(System.Security.SecurityException){}
     }
     void StopWatching(){
-        if(watchBadge!=null){if(!quitting)SaveAwarenessPreference(0);watchBadge.Close();}
+        if(watchBadge!=null){if(!quitting && !offscreenReview)SaveAwarenessPreference(0);watchBadge.Close();}
     }
     static bool CanObserveFocus(){
         try{
             var element=AutomationElement.FocusedElement;
             if(element==null)return false;
             object password=element.GetCurrentPropertyValue(AutomationElement.IsPasswordProperty,true);
-            return password is bool && !(bool)password;
+            uint pid;GetWindowThreadProcessId(GetForegroundWindow(),out pid);
+            return password is bool && !(bool)password && pid!=0 && element.Current.ProcessId==(int)pid;
         }catch(System.Runtime.InteropServices.COMException){return false;}
+         catch(ElementNotAvailableException){return false;}
          catch(InvalidOperationException){return false;}
          catch(UnauthorizedAccessException){return false;}
     }
-    async void SampleScreen(string question=""){
-        if(quitting || watchBadge==null)return;
-        if(sampling){
-            if(question.Length>0)LocalReply("A local screen check is running. Try your question again in a moment.");
-            return;
-        }
-        if(inspecting || (studyWindow!=null && studyWindow.IsActive) || (chatWindow!=null && chatWindow.IsVisible) || !CanObserveFocus()){
-            observation="";watchLabel.Text="Screen paused · focus";if(question.Length>0)LocalReply("Screen paused for this focus. Return to a supported app and try again.");return;
-        }
-        int generation=watchGeneration,requestedDuring=dialogueVersion;
-        var captureWindow=ReadWindow(GetForegroundWindow(),true);
-        if(captureWindow==null){if(question.Length>0)LocalReply("No eligible window is focused.");return;}
-        Track(captureWindow);int captureVersion=sceneVersion;
-        sampling=true;watchLabel.Text="Screen on · checking";
+    bool CaptureFocus(Activity target,int revision){
+        return !inspecting && (chatWindow==null || !chatWindow.IsVisible) &&
+            target!=null && GetForegroundWindow()==target.Handle && CanObserveFocus() &&
+            SameCapture(target,ReadWindow(target.Handle,true),revision,sceneVersion);
+    }
+    async void SampleScreen(){
+        if(quitting || watchBadge==null || sampling || ScreenQuestionPending || inspecting ||
+           (chatWindow!=null && chatWindow.IsVisible))return;
+        if(!CanObserveFocus()){InvalidateScene();watchLabel.Text="Screen paused · protected or unavailable focus";return;}
+        var target=ReadWindow(GetForegroundWindow(),true);
+        if(target==null)return;
+        Track(target);
+        await RunScreenCheck(current,"",watchGeneration,sceneVersion);
+    }
+    async Task<VisionRead> RunScreenCheck(Activity target,string question,int generation,int revision){
+        var pending=CaptureScreen(target,question,generation,revision);
+        screenCheck=pending;
+        try{return await pending;}
+        finally{if(screenCheck==pending)screenCheck=null;}
+    }
+    async Task<VisionRead> CaptureScreen(Activity target,string question,int generation,int revision){
+        if(watchBadge==null || generation!=watchGeneration || !CaptureFocus(target,revision))return null;
+        sampling=true;screenIssue="";nextSnapshot=DateTime.UtcNow.AddSeconds(12);watchLabel.Text="Screen on · checking locally";
         try{
             NativeRect frame;
-            if(!GetWindowRect(captureWindow.Handle,out frame))throw new IOException();
-            var b=Drawing.Rectangle.Intersect(Forms.Screen.FromHandle(captureWindow.Handle).Bounds,
+            if(!GetWindowRect(target.Handle,out frame))throw new IOException();
+            var b=Drawing.Rectangle.Intersect(Forms.Screen.FromHandle(target.Handle).Bounds,
                 Drawing.Rectangle.FromLTRB(frame.left,frame.top,frame.right,frame.bottom));
             if(b.Width<8 || b.Height<8)throw new IOException();
-            DateTime captured=DateTime.Now;
+            DateTime captured=DateTime.UtcNow;
             byte[] image=CaptureArea(new Rect(b.X,b.Y,b.Width,b.Height));
+            if(!CaptureFocus(target,revision))return null;
             string digest;
             using(var hash=System.Security.Cryptography.SHA256.Create())digest=Convert.ToBase64String(hash.ComputeHash(image));
-            if(question.Length==0 && observation.Length>0 && digest==previousImage){
-                watchLabel.Text="Watching "+captureWindow.App;return;
-            }
-            string[] lines=await Task.Run(()=>AskVision(image,"screen",question));
-            if(watchBadge==null || generation!=watchGeneration || quitting)return;
-            if(!SameCapture(captureWindow,ReadWindow(GetForegroundWindow(),true),captureVersion,sceneVersion) || !CanObserveFocus()){
-                observation="";if(question.Length>0 && requestedDuring==dialogueVersion)LocalReply("The window changed during that check.");
-                return;
-            }
-            string description=System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lines[0]));
-            if(question.Length>0 && requestedDuring==dialogueVersion){LocalReply(description);showingScreenReply=true;}
-            if(question.Length==0){if(current!=null && current.Same(captureWindow))current.Visual=description;observation=description;previousImage=digest;observedAt=captured;}
-            watchLabel.Text="Watching "+captureWindow.App+" · "+captured.ToString("HH:mm:ss");
+            VisionRead result;
+            if(question.Length==0 && FreshVision().Length>0 && digest==target.ImageDigest)
+                result=new VisionRead{summary=target.Visual,observation=target.Visual};
+            else result=await Task.Run(()=>AskVision(image,"screen",question));
+            if(watchBadge==null || generation!=watchGeneration || quitting)return null;
+            if(!CaptureFocus(target,revision))return null;
+            current.Visual=result.observation??"";current.VisualAt=captured;current.ImageDigest=question.Length==0?digest:"";
+            watchLabel.Text="Watching "+FriendlyApp(target.App)+" · "+captured.ToLocalTime().ToString("HH:mm:ss");
+            return result;
         }catch(Exception){
-            if(watchBadge!=null && generation==watchGeneration && captureVersion==sceneVersion){observation="";watchLabel.Text=captureWindow.App+" · vision unavailable";if(question.Length>0 && requestedDuring==dialogueVersion)LocalReply("Screen check failed. Check the vision model in LM Studio.");}
+            if(watchBadge!=null && generation==watchGeneration && revision==sceneVersion){
+                current.Visual="";current.ImageDigest="";current.VisualAt=DateTime.MinValue;
+                screenIssue="I couldn’t read the screen locally. Check the vision model in LM Studio.";
+                watchLabel.Text="Screen on · local vision unavailable";
+            }
+            return null;
         }finally{sampling=false;}
+    }
+    async void AnswerScreen(string question,bool activity=false,bool explain=false){
+        if(watchBadge==null){LocalReply("Desktop awareness is off. Say “start watching my screen” to enable it.");return;}
+        int generation=watchGeneration,dialog=dialogueVersion;
+        bool fromComposer=ComposerFocused;
+        var target=fromComposer?composerTarget:CanObserveFocus()?ReadWindow(GetForegroundWindow(),true):null;
+        if(target==null){LocalReply("I can’t inspect this focus safely. Open a non-sensitive app, then summon me over it.");return;}
+        screenQuestion=dialog;
+        try{
+            if(fromComposer)HideComposer();
+            else if(chatWindow!=null && chatWindow.IsVisible)chatWindow.Hide();
+            await Task.Delay(180);
+            if(quitting || generation!=watchGeneration || dialog!=dialogueVersion)return;
+            if(GetForegroundWindow()!=target.Handle || !target.Same(ReadWindow(target.Handle,true))){
+                LocalReply("Windows didn’t return to that app. Focus it and summon me again.");return;
+            }
+            if(!CanObserveFocus()){InvalidateScene();watchLabel.Text="Screen paused · protected or unavailable focus";
+                LocalReply("I won’t capture a protected or unavailable focus. Move to a non-sensitive window first.");return;}
+            Track(ReadWindow(target.Handle,true));int revision=sceneVersion;
+            Signal("think","Checking your screen locally…",35);
+            if(screenCheck!=null && !screenCheck.IsCompleted){
+                watchLabel.Text="Screen on · waiting for local check";await screenCheck;
+            }
+            if(quitting || generation!=watchGeneration || dialog!=dialogueVersion)return;
+            if(!CaptureFocus(target,revision)){LocalReply("The focused window changed. Ask again over the app you mean.");return;}
+            var result=await RunScreenCheck(current,question,generation,revision);
+            if(quitting || generation!=watchGeneration || dialog!=dialogueVersion)return;
+            if(!CaptureFocus(target,revision)){LocalReply("The focused window changed during the check. I discarded that answer.");return;}
+            if(activity){await ReadActivity(explain?"why":"read","",screenIssue);return;}
+            LocalReply(result!=null?result.summary:screenIssue.Length>0?screenIssue:"I couldn’t safely capture that window.");
+            showingScreenReply=true;
+        }finally{if(screenQuestion==dialog)screenQuestion=-1;}
     }
     static byte[] CaptureArea(Rect area){
         using(var capture=new Drawing.Bitmap((int)area.Width,(int)area.Height)){
@@ -131,11 +178,109 @@ namespace MellowDesktop {
             g.DrawString("Practice quiz: BLUEBIRD",font,Drawing.Brushes.Black,16,42);
             bitmap.Save(memory,Drawing.Imaging.ImageFormat.Png);image=memory.ToArray();
         }
-        string[] lines=AskVision(image,"screen","Which word comes after Practice quiz?");
-        string answer=System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lines[0]));
+        string answer=AskVision(image,"screen","Which word comes after Practice quiz?").summary;
         if(answer.IndexOf("bluebird",StringComparison.OrdinalIgnoreCase)<0)
             throw new InvalidOperationException("The local model did not identify the fixture word.");
         Console.WriteLine("Local screen question passed using a synthetic card.");
+    }
+    public static string VerifyLiveAwareness(){
+        var dispatcher=Dispatcher.CurrentDispatcher;
+        var frame=new DispatcherFrame();
+        var previous=System.Threading.SynchronizationContext.Current;
+        System.Threading.SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(dispatcher));
+        try{
+            var check=VerifyLiveAwarenessAsync();
+            check.ContinueWith(_=>dispatcher.BeginInvoke(new Action(()=>frame.Continue=false)));
+            Dispatcher.PushFrame(frame);
+            check.GetAwaiter().GetResult();
+            return "Live Windows awareness passed: screen and task answers, unavailable vision, current track, foreground switch and protected focus.";
+        }finally{System.Threading.SynchronizationContext.SetSynchronizationContext(previous);}
+    }
+    static async Task VerifyLiveAwarenessAsync(){
+        var ghost=new Ghost(true,null,false,true);
+        var target=new IntPtr(long.Parse(Environment.GetEnvironmentVariable("MELLOW_FIXTURE_HWND")));
+        var locked=new IntPtr(long.Parse(Environment.GetEnvironmentVariable("MELLOW_PROTECTED_HWND")));
+        if(Caption(target)!="Linear algebra quiz - Awareness verification" ||
+           Caption(locked)!="Mellow protected focus fixture")throw new InvalidOperationException("Synthetic windows required.");
+        string model=Environment.GetEnvironmentVariable("MELLOW_VISION_MODEL");
+        Exception failure=null;
+        try{
+            SetForegroundWindow(target);
+            var startDeadline=DateTime.UtcNow.AddSeconds(2);
+            while((GetForegroundWindow()!=target || !CanObserveFocus()) && DateTime.UtcNow<startDeadline)await Task.Delay(50);
+            if(GetForegroundWindow()!=target || !CanObserveFocus())throw new InvalidOperationException("Could not focus the synthetic quiz window safely.");
+            ghost.StartWatching();ghost.watchTimer.Stop();
+            ghost.SampleScreen();
+            ghost.SubmitAwarenessFixture(target,"Look at my screen: Which word comes after Practice quiz?");
+            await ghost.ExpectAwarenessFixture("bluebird");
+            ghost.SubmitAwarenessFixture(target,"What am I doing right now.");
+            await ghost.ExpectAwarenessFixture("linear algebra");
+            if(ghost.reply.ToString().IndexOf("Other open apps",StringComparison.OrdinalIgnoreCase)>=0)
+                throw new InvalidOperationException("Activity answer included an app inventory.");
+            Console.WriteLine("Foreground composer: screen question and current task answered from the quiz fixture.");
+
+            Environment.SetEnvironmentVariable("MELLOW_VISION_MODEL","invalid model fixture");
+            ghost.SubmitAwarenessFixture(target,"Can you see my screen.");
+            await ghost.ExpectAwarenessFixture("couldn’t read the screen locally");
+            ghost.SubmitAwarenessFixture(target,"What am I doing?");
+            await ghost.ExpectAwarenessFixture("linear algebra","vision model");
+            Console.WriteLine("Unavailable vision: screen check reports failure and activity falls back to the current title.");
+
+            ghost.SubmitAwarenessFixture(target,"what i ma listening to.");
+            var mediaDeadline=DateTime.UtcNow.AddSeconds(16);
+            while(!ghost.finished && DateTime.UtcNow<mediaDeadline)await Task.Delay(50);
+            string mediaAnswer=ghost.reply.ToString();
+            if(!ghost.finished || (!mediaAnswer.StartsWith("Playing:") && !mediaAnswer.StartsWith("Selected (not playing):") &&
+                !mediaAnswer.StartsWith("Windows is not reporting a current media session.")))
+                throw new InvalidOperationException("Composer did not report current Windows media availability.");
+            Console.WriteLine("Read-only current track query: "+(mediaAnswer.StartsWith("Windows is not reporting")?"no Windows session":"Windows returned a track"));
+            ghost.HideComposer();await Task.Delay(180);
+            Environment.SetEnvironmentVariable("MELLOW_VISION_MODEL",model);
+
+            ghost.SubmitAwarenessFixture(target,"Can you see my screen?");
+            var switchDeadline=DateTime.UtcNow.AddSeconds(3);
+            while(!ghost.sampling && DateTime.UtcNow<switchDeadline)await Task.Delay(20);
+            if(!ghost.sampling || GetForegroundWindow()!=target || !PostMessage(target,0x8001,new IntPtr(24843),IntPtr.Zero))
+                throw new InvalidOperationException("Could not request a fixture switch during inference.");
+            while(GetForegroundWindow()==target && DateTime.UtcNow<switchDeadline)await Task.Delay(20);
+            if(GetForegroundWindow()!=locked)throw new InvalidOperationException("Could not switch to the protected fixture.");
+            await ghost.ExpectAwarenessFixture("changed");
+            await Task.Delay(150);
+            if(GetForegroundWindow()!=locked || CanObserveFocus())throw new InvalidOperationException("Password focus was not protected.");
+            int revision=ghost.sceneVersion;
+            ghost.SubmitAwarenessFixture(locked,"What's on my screen?");
+            await ghost.ExpectAwarenessFixture("safely");
+            if(ghost.sampling || ghost.sceneVersion==revision || ghost.FreshVision().Length>0)
+                throw new InvalidOperationException("Sensitive focus retained capture evidence.");
+            Console.WriteLine("Foreground switch discarded the pending answer; the password field stayed uncaptured.");
+        }catch(Exception error){failure=error;}
+        finally{
+            Environment.SetEnvironmentVariable("MELLOW_VISION_MODEL",model);
+            ghost.StopWatching();ghost.quitting=true;
+            if(ghost.chatWindow!=null)ghost.chatWindow.Close();
+            if(ghost.replyPopup!=null)ghost.replyPopup.IsOpen=false;
+            ghost.window.Close();
+        }
+        if(ghost.screenCheck!=null)await ghost.screenCheck;
+        if(failure!=null)System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+    }
+    void SubmitAwarenessFixture(IntPtr target,string question){
+        if(GetForegroundWindow()!=target)throw new InvalidOperationException("Foreground left the synthetic fixture.");
+        OpenChat();
+        if(!ComposerFocused || !input.IsKeyboardFocused)throw new InvalidOperationException("Composer did not take keyboard focus.");
+        input.Text=question;SendInput();
+    }
+    async Task ExpectAwarenessFixture(params string[] parts){
+        var deadline=DateTime.UtcNow.AddSeconds(75);
+        while(!finished && DateTime.UtcNow<deadline)await Task.Delay(50);
+        foreach(string part in parts)
+            if(!finished || reply.ToString().IndexOf(part,StringComparison.OrdinalIgnoreCase)<0){
+                IntPtr foreground=GetForegroundWindow();uint pid;GetWindowThreadProcessId(foreground,out pid);
+                var app=IdentifyWindow(foreground,pid,false);
+                throw new InvalidOperationException("Expected fixture reply containing "+part+"; got: "+reply+
+                    " (fixture foreground: "+(foreground==previousApp)+", protected or unknown focus: "+!CanObserveFocus()+
+                    ", foreground app: "+(app==null?"unknown":app.App)+")");
+            }
     }
     static bool WebAddress(string value,out Uri uri){
         return Uri.TryCreate(value,UriKind.Absolute,out uri) && uri.Scheme=="https" && uri.Host.Length>0 &&
@@ -155,12 +300,22 @@ namespace MellowDesktop {
         return PostMessage(h,0x0319,h,new IntPtr(cmd<<16))?"Browser command sent: "+action+".":"Windows declined the browser command.";
     }
     static string DesktopIntent(string message){
-        string text=message.Trim().TrimEnd('?');
-        if(text.Equals("what am I doing",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what am I doing right now",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what am I currently doing",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what am I doing on my computer",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what am I working on",StringComparison.OrdinalIgnoreCase))return "/activity";
+        string text=message.Trim().TrimEnd('?','.','!');
+        string question=System.Text.RegularExpressions.Regex.Replace(message.Replace('’','\'').Trim().TrimEnd('?','.','!'),@"\s+"," ").ToLowerInvariant();
+        question=System.Text.RegularExpressions.Regex.Replace(question,@"^(?:please |can you tell me |could you tell me |tell me )+","");
+        question=System.Text.RegularExpressions.Regex.Replace(question,@"(?: right now| now| at the moment| currently| rn| on my computer| on my laptop| please)+$","");
+        question=question.Replace("i'm","i am").Replace("what's","what is");
+        if(System.Text.RegularExpressions.Regex.IsMatch(question,@"^(?:(?:(?:can you tell|do you know) )?what (?:am i|i am|i ma|i) (?:currently )?(?:doing|working on)|what is my current (?:activity|task)|what are we working on)$"))return "/activity";
+        if(System.Text.RegularExpressions.Regex.IsMatch(question,@"^(?:what (?:am i|i am|i ma|i) (?:currently )?listening to|what (?:music|song|track) am i (?:currently )?listening to|what (?:is )?playing|(?:what|which) (?:song|music|track) is (?:this|playing))$"))return "/music current";
+        if(System.Text.RegularExpressions.Regex.IsMatch(question,@"^(?:can you see (?:my screen|what i am doing)|what (?:can|do) you see (?:on )?(?:my|the) screen|what does my screen show|describe (?:my|the) (?:screen|focused window)|what is on (?:my|the) screen)$"))
+            return "/screen ask Describe the visible activity and task, using only legible evidence.";
+        if(System.Text.RegularExpressions.Regex.IsMatch(question,@"^(?:what (?:apps|applications|windows) (?:do i have open|are open)|what do i have open)$"))return "/open-apps";
+        if(question=="why do you think that" || question=="why do you think i am doing that" ||
+           question=="what am i doing, and what makes you think that" || question=="what am i doing, and why")return "/activity why";
+        const string screenPrefix="look at my screen: ";
+        if(message.TrimStart().StartsWith(screenPrefix,StringComparison.OrdinalIgnoreCase))return "/screen ask "+message.TrimStart().Substring(screenPrefix.Length);
+        if(System.Text.RegularExpressions.Regex.IsMatch(question,@"^(?:(?:can|could) you )?(?:look at|check|read) (?:my|the) screen(?:[,:] .+| and .+| for .+)$") ||
+           System.Text.RegularExpressions.Regex.IsMatch(question,@"^(?:what|which) (?:\w+ ){1,4}(?:is|are|do you see) (?:visible |shown |displayed )?(?:on (?:my|the) screen|in (?:my|the) focused window)$"))return "/screen ask "+message.Trim();
         if(text.Equals("where was I",StringComparison.OrdinalIgnoreCase))return "/recent-apps";
         if(text.Equals("take me back",StringComparison.OrdinalIgnoreCase))return "/back-to";
         const string back="take me back to ";
@@ -170,28 +325,28 @@ namespace MellowDesktop {
         if(text.Equals("skip this setup",StringComparison.OrdinalIgnoreCase))return "/skip-setup";
         if(text.Equals("start watching my screen",StringComparison.OrdinalIgnoreCase))return "/screen watch";
         if(text.Equals("stop watching my screen",StringComparison.OrdinalIgnoreCase))return "/screen stop";
-        if(text.Equals("can you see my screen",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("can you see what I'm doing",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what can you see on my screen",StringComparison.OrdinalIgnoreCase) ||
-           text.Equals("what do you see on my screen",StringComparison.OrdinalIgnoreCase))
-            return "/screen ask Describe the focused window and what the user is doing.";
         if(text.Equals("refresh this tab",StringComparison.OrdinalIgnoreCase))return "/browser refresh";
         if(text.Equals("go back in my browser",StringComparison.OrdinalIgnoreCase))return "/browser back";
         if(text.Equals("go forward in my browser",StringComparison.OrdinalIgnoreCase))return "/browser forward";
         if(text.Equals("open notepad",StringComparison.OrdinalIgnoreCase))return "/open notepad";
         if(text.Equals("open calculator",StringComparison.OrdinalIgnoreCase))return "/open calculator";
-        const string search="search the web for ",ask="look at my screen: ";
-        if(message.StartsWith(ask,StringComparison.OrdinalIgnoreCase))return "/screen ask "+message.Substring(ask.Length);
+        const string search="search the web for ";
         if(message.StartsWith(search,StringComparison.OrdinalIgnoreCase))return "/search "+message.Substring(search.Length);
         if(message.StartsWith("open https://",StringComparison.OrdinalIgnoreCase))return "/open "+message.Substring(5);
         return message;
     }
     bool WorkspaceCommand(string message){
-        if(RecognitionCommand(message) || SetupCommand(message) || StudyCommand(message))return true;
         message=DesktopIntent(message);
+        if(RecognitionCommand(message) || SetupCommand(message) || StudyCommand(message))return true;
         string[] parts=message.Split(new[]{' '},2);
         string key=parts[0].ToLowerInvariant(),arg=parts.Length>1?parts[1].Trim():"";
-        if(key=="/activity" || key=="/recent-apps"){DescribeActivity(key=="/recent-apps");return true;}
+        if(key=="/activity"){AnswerScreen("",true,arg=="why");return true;}
+        if(key=="/recent-apps"){DescribeActivity(true);return true;}
+        if(key=="/music" && arg=="current"){StudyMedia("current");return true;}
+        if(key=="/open-apps"){
+            if(watchBadge==null){LocalReply("Desktop awareness is off. Say “start watching my screen” to enable it.");return true;}
+            LocalReply(BackgroundApps(current));showingScreenReply=true;return true;
+        }
         if(key=="/back-to"){RewindTo(arg);return true;}
         if(key=="/save-setup"){SavedSetup("save","default","");return true;}
         if(key=="/restore-setup"){
@@ -199,19 +354,23 @@ namespace MellowDesktop {
             return true;
         }
         if(key=="/skip-setup"){proposed=null;LocalReply("Okay, carry on.");return true;}
-        if(key=="/screen" || message.TrimEnd('?').Equals("what's on my screen",StringComparison.OrdinalIgnoreCase)){
+        if(key=="/screen"){
             if(key=="/screen" && arg.StartsWith("ask ",StringComparison.OrdinalIgnoreCase)){
                 string question=arg.Substring(4).Trim();
                 if(watchBadge==null)LocalReply("Use /screen watch first. The screen badge stays visible while observation is on.");
                 else if(question.Length==0 || question.Length>500)LocalReply("Use a screen question of 1 to 500 characters.");
-                else SampleScreen(question);
+                else AnswerScreen(question);
                 return true;
             }
             if(arg=="watch"){StartWatching();return true;}
             if(arg=="stop"){StopWatching();LocalReply("Screen observation stopped. The cached description was cleared.");return true;}
-            LocalReply(watchBadge==null?"Screen observation is off. Use /screen watch to observe the active window locally.":
-                observation.Length>0?"Last screen check ("+observedAt.ToString("HH:mm:ss")+"): "+observation:
-                watchLabel.Text+". No description yet.");showingScreenReply=watchBadge!=null;return true;
+            if(arg=="status"){
+                string visual=FreshVision();
+                LocalReply(watchBadge==null?"Desktop awareness is off.":visual.Length>0?
+                    "Last local screen check ("+current.VisualAt.ToLocalTime().ToString("HH:mm:ss")+"): "+visual:watchLabel.Text+". No fresh screen description.");
+                showingScreenReply=watchBadge!=null;return true;
+            }
+            AnswerScreen("Describe the visible activity and task, using only legible evidence.");return true;
         }
         try{
             if(key=="/browser"){LocalReply(NavigateBrowser(arg.ToLowerInvariant()));return true;}
@@ -231,7 +390,7 @@ namespace MellowDesktop {
             }
             if(key=="/point"){Later(PointAtControl);return true;}
             if(key=="/close-window"){Later(delegate{SelectWindow(true);});return true;}
-            if(key=="/desktop"){LocalReply("What am I doing? · Where was I? · Take me back\nRemember my setup · Restore my setup\n/screen watch · /screen · /screen ask QUESTION · /screen stop\n/open https://example.com\n/search terms\n/browser back, forward or refresh\n/open notepad or calculator\n/point · /close-window");return true;}
+            if(key=="/desktop"){LocalReply("What am I doing? · What am I listening to? · Where was I?\nTake me back · Remember my setup · Restore my setup\n/screen watch · /screen · /screen status · /screen ask QUESTION · /screen stop\n/open https://example.com\n/search terms\n/browser back, forward or refresh\n/open notepad or calculator\n/point · /close-window");return true;}
         }catch(Exception){LocalReply("Windows could not complete that action.");return true;}
         return false;
     }
