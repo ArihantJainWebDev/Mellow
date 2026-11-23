@@ -4,7 +4,7 @@
 
 1. Combine foreground app, visible content and background app presence into a local, timestamped account of the current activity. Acceptance example: recognize an AI chat about Mellow, separately identify a background game, and update the answer after an app switch. Where evidence is ambiguous, say what is uncertain.
 2. Connect that short-lived context to optional longer-lived preferences. Verify that correcting a mistaken inference changes subsequent behavior and that forgetting a preference removes its influence.
-3. Demonstrate initiative with one enabled study routine. Recognize studying, start YouTube Music, and change tracks without individual commands. Verify that manual pause wins and that one skipped track does not permanently redefine taste.
+3. Demonstrate initiative through study music and a learned project setup. Offer the recurring Opera links, ChatGPT, VS Code and music together, then restore the setup after one confirmation. Recognize studying, start YouTube Music, and change tracks without individual commands. Verify that manual pause wins and that one skipped track does not permanently redefine taste.
 4. Extend to additional browser and app actions, including WhatsApp, as their individual integrations are verified. Voice, webcam, avatar polish and mail connectors are deferred.
 
 Agreed product baseline • 22 November 2026

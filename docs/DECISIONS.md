@@ -70,3 +70,7 @@ A single composer serves chat, local assignments and explicit desktop commands. 
 ## November 23, 2026 · Awareness before mail
 
 Prioritize cross-app activity understanding and adaptive behavior. Study music is the first planned autonomous routine. The AI-chat and background-game example is the acceptance scenario for awareness. See the current roadmap for the sequence.
+
+## November 23, 2026 - Everyday autonomy and visible attention
+
+Resume permitted awareness automatically, remember detailed activity episodes, and move diagnostic controls out of the daily interaction. Study music can adapt within its routine. Restoring a learned workspace gets one confirmation for the whole setup each time it is offered. Visible attention follows real activity even during quiet browsing. See the acceptance scenes in [Product design](PRODUCT_DESIGN.md).

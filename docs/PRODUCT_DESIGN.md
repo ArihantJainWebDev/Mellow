@@ -39,7 +39,7 @@ The five release goals remain useful groupings. The order below reflects the own
 | 0. Agree the design | Review this document, resolve everyday autonomy and memory choices, record decisions. | Owner recognizes the scenarios and agrees with the first milestone. |
 | 1. Understand the desktop | Make the AI-chat, project and background-game scenario work across app changes. Start with answers on request. | Run repeatable scenes with a game open, foregrounded, minimized and closed. Include ambiguous content, unavailable vision and a switch during inference. Record correct and stale answers, update delay and resource use. |
 | 2. Learn from experience | Connect current context to correctable preferences and episodes. Give the owner an inspectable account of why behavior changed. | Verify learning, corrections, forgetting and restart on fictional sessions. |
-| 3. Take useful initiative | Deliver study music as the first end-to-end routine. Add a quiet response and a timely offer in other activities. | Measure unwanted starts and interruptions as well as useful actions. Verify manual override and playback failure handling. |
+| 3. Take useful initiative | Deliver study music and a learned project setup as the first two routines. Add a quiet response and a timely offer in other activities. | Measure unwanted starts and interruptions as well as useful actions. Verify manual override, playback failure handling and one confirmation per proposed project setup. |
 | 4. Expand useful work | Extend verified actions to browser and apps, then mail, college updates, social drafting and WhatsApp. Grow the control center alongside the underlying records. | Demonstrate one complete user outcome per integration, including offline, misunderstanding and retry cases. |
 | 5. Expand presence | Add voice, optional camera, phone access and further character work in owner-selected order. | Demonstrate visible sensor state, immediate pause, target accuracy, revocation and graceful degradation on the owner's hardware. |
 
@@ -47,10 +47,14 @@ The five release goals remain useful groupings. The order below reflects the own
 
 The [desktop workflow](DESKTOP_WORKFLOW.md) describes the existing interaction, task commands, sampled screen vision and supported actions. The [progress tracker](PROGRESS.md) records verification. The capabilities above are design targets. Before a milestone release, compare realistic scenes on the 12 GB laptop and RTX 3050 with sensing on and off. Record chat first-token delay, local inference time, memory and GPU use, hosted tokens and cost. Keep the setup, configuration example, license, tests and reproducible fictional demo usable from a clean checkout. Publish claims backed by those results.
 
-## Choices awaiting Arihant's review
+## Everyday behavior agreed with Arihant
 
-- After the first opt-in, when should desktop awareness start again? Which activities should always be excluded?
-- A week later, what should survive from a study session: preferences, a short episode, or searchable activity history? Decide retention, export and deletion before adding durable activity tracking.
-- Beyond music, which routine may act on its own first? Which actions always need a fresh confirmation?
+**Starting the day.** After initial setup and the permissions required by Windows or a connected service, Mellow resumes permitted desktop awareness automatically. An explicit privacy pause must be respected. The everyday interface is the character and conversation. The long right-click list belongs in developer tools during testing. Keep pause and exit easy to reach.
 
-Record the owner's answers in the decision log and revise the scenarios before implementing the awareness milestone.
+**Remembering a session.** Preserve enough local activity detail to answer questions such as "Which track did I replay while working on Mellow?" and "Which tools and links did I use last time?" Associate track plays, skips, repeats, apps, project links and times with the activity where evidence is available. Distinguish an observed skip from a learned dislike. If a player did not expose the track, say so. Verify recall after restarting and verify that deleting an episode removes it from future answers and routine evidence.
+
+**Recognizing a setup.** Across several project sessions, notice the recurring combination of particular Opera links, ChatGPT, VS Code and YouTube Music. On a later return to that project, offer the actual proposed setup in one question. One yes covers that setup on this occasion. Reuse open tabs and apps, open the missing items, and report any failure. If Arihant declines, leave the desktop alone and suppress repeat offers during that session. Test a similar casual browsing session to catch false offers.
+
+**Showing attention.** While Arihant is comparing two items in Opera, Mellow's eyes follow the relevant item, his head follows his gaze, and he shifts aside when he covers it. If the page changes, he releases the old target. When Arihant reads quietly, Mellow can settle beside the content; a fixed front-facing stare throughout scrolling and switching tabs fails this scene. Test with speech and bubbles muted. A viewer should be able to identify what caught his attention without reading an explanation.
+
+**Still to decide.** How long detailed activity history lasts, which apps or conversations are always private, and whether original screen images are ever retained. Broad recall is agreed. Continuous screenshot storage remains an open design choice.
