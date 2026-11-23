@@ -2,6 +2,8 @@
 
 Product baseline adopted 2026-11-22. The [roadmap](ROADMAP.md) defines scope, sequence and release gates.
 
+The [product design](PRODUCT_DESIGN.md) collects the owner’s everyday scenarios, proposed build sequence and open design choices for review.
+
 ## Purpose
 
 Build Mellow as a deeply personal OS companion: a recognizable presence that learns about its owner, maintains continuity, and eventually hears, sees, and performs useful actions with permission. Curiosity and understanding the code are primary motivations. A useful open-source release and an honest interview story are desired outcomes.

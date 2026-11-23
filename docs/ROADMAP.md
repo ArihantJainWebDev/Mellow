@@ -13,7 +13,7 @@ Mellow is a Windows companion that shares one ongoing conversation with its owne
 
 ## How to use this plan
 
-Follow the five release goals in order. Before each block, identify the requirement, current behavior and stopping test. If either of us proposes work outside the active goal, call it out, say which milestone it would displace, and return to the active block unless the owner explicitly revises the plan. Record approved changes and rationale in [Decisions](DECISIONS.md) before implementation. Keep observed results in [Progress](PROGRESS.md). Walk through changed files, key functions and data flow after each batch. Assess understanding separately in the private report card.
+Use the five goals to group releases. Follow the owner-reviewed priority sequence in the [product design](PRODUCT_DESIGN.md); the current step is design review. Before each block, identify the requirement, current behavior and stopping test. If either of us proposes work outside the active goal, call it out, say which milestone it would displace, and return to the active block unless the owner explicitly revises the plan. Record approved changes and rationale in [Decisions](DECISIONS.md) before implementation. Keep observed results in [Progress](PROGRESS.md). Walk through changed files, key functions and data flow after each batch. Assess understanding separately in the private report card.
 
 ## 1. Everyday continuity
 
