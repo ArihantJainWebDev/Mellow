@@ -26,7 +26,7 @@ namespace MellowDesktop {
         watchGeneration++;observation="";ClearActivity();
         var bar=new StackPanel{Orientation=Orientation.Horizontal,Margin=new Thickness(8,2,4,2)};
         watchLabel=new TextBlock{Text="Screen on · local",VerticalAlignment=VerticalAlignment.Center};
-        bar.Children.Add(watchLabel);
+        bar.Children.Add(watchLabel);InitActivityOffer(bar);
         setupHint=Choice("Workspace?",delegate{
             if(waitingSetup!=null && DateTime.UtcNow<offerExpires)
                 PresentSetup(waitingSetup,"Restore these familiar windows?","");
@@ -107,7 +107,7 @@ namespace MellowDesktop {
             }
             string description=System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lines[0]));
             if(question.Length>0 && requestedDuring==dialogueVersion){LocalReply(description);showingScreenReply=true;}
-            if(question.Length==0){observation=description;previousImage=digest;observedAt=captured;}
+            if(question.Length==0){if(current!=null && current.Same(captureWindow))current.Visual=description;observation=description;previousImage=digest;observedAt=captured;}
             watchLabel.Text="Watching "+captureWindow.App+" · "+captured.ToString("HH:mm:ss");
         }catch(Exception){
             if(watchBadge!=null && generation==watchGeneration && captureVersion==sceneVersion){observation="";watchLabel.Text=captureWindow.App+" · vision unavailable";if(question.Length>0 && requestedDuring==dialogueVersion)LocalReply("Screen check failed. Check the vision model in LM Studio.");}
@@ -178,7 +178,7 @@ namespace MellowDesktop {
         return message;
     }
     bool WorkspaceCommand(string message){
-        if(SetupCommand(message) || StudyCommand(message))return true;
+        if(RecognitionCommand(message) || SetupCommand(message) || StudyCommand(message))return true;
         message=DesktopIntent(message);
         string[] parts=message.Split(new[]{' '},2);
         string key=parts[0].ToLowerInvariant(),arg=parts.Length>1?parts[1].Trim():"";

@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from mellow.memory_policy import statement, words
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 MAX_ACTIVE_JOBS = 100
 MAX_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -164,7 +164,11 @@ class History:
                     source TEXT NOT NULL, song TEXT NOT NULL, artist TEXT NOT NULL,
                     vote TEXT NOT NULL CHECK(vote IN ('keep','skip')), at INTEGER NOT NULL,
                     PRIMARY KEY(session_id,source,song,artist))""")
-                db.execute("PRAGMA user_version = 14")
+                version = 14
+            if version == 14:
+                db.execute("""CREATE TABLE IF NOT EXISTS activity_corrections (
+                    app TEXT NOT NULL, features TEXT NOT NULL, label TEXT NOT NULL, PRIMARY KEY(app,features))""")
+                db.execute("PRAGMA user_version = 15")
             elif version != SCHEMA_VERSION:
                 raise sqlite3.DatabaseError("Unsupported history schema version.")
 
@@ -224,6 +228,7 @@ class History:
             db.execute("DELETE FROM assignments")
             db.execute("DELETE FROM workspace_windows")
             db.execute("DELETE FROM workspace_links")
+            db.execute("DELETE FROM activity_corrections")
             db.execute("DELETE FROM desktop_moments")
             db.execute("DELETE FROM study_sessions")
             db.execute("DELETE FROM study_mixes")
@@ -232,7 +237,7 @@ class History:
     def export(self, path: Path) -> None:
         tables = ("sessions", "turns", "active_chat", "memory_candidates", "memory_jobs",
                   "automatic_memories", "hidden_turns", "assignments", "assignment_notices", "workspace_windows", "workspace_links",
-                  "study_mixes", "study_sessions", "study_picks", "study_tracks", "study_settings", "desktop_moments", "study_song_feedback")
+                  "study_mixes", "study_sessions", "study_picks", "study_tracks", "study_settings", "desktop_moments", "study_song_feedback", "activity_corrections")
         with closing(self._connect()) as db:
             db.execute("BEGIN")
             db.row_factory = sqlite3.Row

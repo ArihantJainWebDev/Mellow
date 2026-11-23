@@ -71,3 +71,7 @@ python -m mellow.avatar -VerifyScreen
 ```
 
 The first command uses disposable data, including assignments shared across three desktop-worker processes. The second exercises production WPF text measurement and reply state offscreen. The last sends a generated quiz card to the installed local model. No personal screenshot is needed for any of these checks. For the final hands-on check, type in an editor, summon Mellow, submit a long reply, use Next and Back, and check that typing returns to the editor. Try browser navigation on two ordinary pages and use the badge to stop observation.
+
+### Activity recognition
+
+With desktop awareness enabled, ask “What am I doing?” or “Why do you think that?” Mellow uses foreground titles, recent windows and available local screen descriptions. Ambiguous evidence can yield an uncertain answer. Teach a label with “Actually, that was college work” and remove it with “Forget activity label college work”. Labels and matching terms stay in the local history database. A recognized saved setup or study activity can produce a badge offer after a short dwell. Skip dismisses it. Study starts silently unless you choose With music. Similar offers are limited to once per 30 minutes while Mellow is running.

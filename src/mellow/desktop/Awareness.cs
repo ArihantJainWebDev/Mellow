@@ -19,7 +19,7 @@ namespace MellowDesktop {
     sealed class Activity {
         internal IntPtr Handle;
         internal uint Pid;
-        internal string App, Title, Address;
+        internal string App, Title, Address, Visual;
         internal DateTime At;
         internal string Label {get{return FriendlyApp(App)+(Title.Length==0?"":" · "+Title);}}
         internal bool Same(Activity other){
@@ -58,7 +58,7 @@ namespace MellowDesktop {
     static readonly int ownPid=CurrentPid();
     static int CurrentPid(){using(var self=Process.GetCurrentProcess())return self.Id;}
     void InvalidateScene(){
-        current=null;observation="";sceneVersion++;aim=aimY=0;
+        evidenceStart=DateTime.Now;ClearActivityOffer();current=null;observation="";sceneVersion++;aim=aimY=0;
     }
     void ClearActivity(){
         InvalidateScene();visits.Clear();proposed=waitingSetup=null;lastOffer="";
@@ -66,7 +66,7 @@ namespace MellowDesktop {
     }
     void Track(Activity item){
         if(item.Same(current))return;
-        current=item;sceneVersion++;observation="";nextSnapshot=DateTime.UtcNow.AddSeconds(2);
+        ClearActivityOffer();lastChange=DateTime.UtcNow;current=item;sceneVersion++;observation="";nextSnapshot=DateTime.UtcNow.AddSeconds(2);
         if(visits.Count>0 && item.Same(visits[visits.Count-1]))return;
         visits.Add(item);
         if(visits.Count>48)visits.RemoveAt(0);
@@ -112,7 +112,7 @@ namespace MellowDesktop {
         var item=ReadWindow(GetForegroundWindow(),true);
         if(item==null){if(current!=null)InvalidateScene();return;}
         bool changed=!item.Same(current);
-        Track(item);PollStudy(item,DateTime.UtcNow);
+        Track(item);PollStudy(item,DateTime.UtcNow);ConsiderRecognition();
         Rect r=RectFor(item.Handle);
         if(!r.IsEmpty){
             var focus=new Point(r.Left+r.Width/2,r.Top+r.Height/2);
@@ -151,12 +151,7 @@ namespace MellowDesktop {
             for(int i=Math.Max(0,visits.Count-5);i<visits.Count;i++)lines.Add(visits[i].At.ToString("HH:mm")+"  "+visits[i].Label);
             LocalReply("Your recent windows\n"+String.Join("\n",lines.ToArray()));showingScreenReply=true;return;
         }
-        if(current==null){LocalReply("I don’t have a current app reading yet.");return;}
-        var live=ReadWindow(previousApp,true);
-        if(!current.Same(live)){LocalReply("Your foreground window changed before I could verify it. Give me a moment in that app.");return;}
-        LocalReply("Just before you opened chat: "+current.Label+"."+
-            (observation.Length>0?"\nLocal screen check at "+observedAt.ToString("HH:mm:ss")+": "+observation:"")+
-            BackgroundApps(current));showingScreenReply=true;
+        Recognize("read","");
     }
     bool setupIO;
     int offerDialogue;

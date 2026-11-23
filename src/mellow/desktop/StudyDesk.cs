@@ -110,6 +110,12 @@ namespace MellowDesktop {
     }
     public static void VerifyStudy(string preview){
         var ghost=new Ghost(true,null,false,true);
+        var payload=new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(
+            new { scenes=new[]{new { app="opera",title="Linear algebra lecture" }} });
+        var activity=ReadFramed<ActivityRead>(new System.Diagnostics.ProcessStartInfo(
+            Environment.GetEnvironmentVariable("MELLOW_PYTHON"),"-m mellow.activity"),EncodeField(payload),10000);
+        if(activity==null || !activity.study || activity.activity!="studying")
+            throw new InvalidOperationException("Desktop activity recognition bridge");
         var fields=new Dictionary<string,object>();
         StudyView fixture=StudyStore("status",fields);
         if(fixture==null || fixture.error!=null || !fixture.active || fixture.topic!="Linear algebra" ||

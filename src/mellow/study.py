@@ -78,7 +78,7 @@ def handle(path, action, values, now=None):
             changed = db.execute("UPDATE study_mixes SET hidden=1 WHERE label=? COLLATE NOCASE AND hidden=0",
                                  (clean(values["label"], 80),)).rowcount
             note = "Removed from the rotation." if changed else "No music with that label."
-        elif action in {"start", "auto-start"}:
+        elif action in {"start", "auto-start", "quiet-start"}:
             if action == "auto-start":
                 cue = db.execute("SELECT app,cue FROM study_settings WHERE id=1").fetchone()
                 if not cue["cue"] or cue["app"] != values.get("app") or cue["cue"] != values.get("cue"):
@@ -90,7 +90,7 @@ def handle(path, action, values, now=None):
                 if topic:
                     topic = clean(topic, 150)
                 sid = db.execute("INSERT INTO study_sessions(started,topic) VALUES(?,?)", (now, topic)).lastrowid
-                launch, note = pick(db, sid, now)
+                launch, note = ("", "Music left as it was.") if action=="quiet-start" else pick(db, sid, now)
                 note = "Study session started. " + note
         elif action == "end":
             if sid:

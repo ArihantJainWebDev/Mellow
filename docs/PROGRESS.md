@@ -239,3 +239,5 @@ The floor walk, selected-window perch and screen climb now have Windows renderer
 The hat model now uses a cloth sleeve with a rounded fingertip for each hand. The same sleeve follows the shoulder through a walk, a point, a climb and prop handling. The gaze and mouth respond to desktop animation states. The hat brim settles after movement, and both umbrella models pivot at the hand. Thought and speech captions have distinct tails.
 
 The offscreen pose review checked 408 frames at three sizes, followed by privacy, left-point, speech and release transitions and the complete hat trick. The offscreen climb checked 918 hat-model and 912 classic-model hand contacts, with a maximum measured visible gap of 0.99 display units for both models. All 51 Python tests passed. [Desktop pose sheet](visuals/cloth-poses.png) and [climb recording](visuals/edge-climb.gif).
+
+- Desktop awareness now explains its local evidence, remembers explicit activity corrections, and offers a saved workspace or study session. The recognition tests cover uncertain results, cross-window continuity, and correction scope. Personal-desktop offer timing still needs a live usage check.
