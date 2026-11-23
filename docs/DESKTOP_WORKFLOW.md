@@ -49,6 +49,8 @@ Start a vision-capable model in LM Studio and enable its local server on port 12
 
 You can also type “Start watching my screen”, “Look at my screen: which error is visible?”, “Stop watching my screen”, “Open calculator”, “Search the web for compiler docs”, “Go back in my browser”, or “Refresh this tab”.
 
+Everyday wording also works. Ask “What am I doing right now?” to inspect local activity evidence, “Can you see my screen?” for one fresh local description, and “What am I listening to?” to inspect a linked Windows media player. A screen question temporarily hides the composer so Mellow can inspect the app that was focused before you opened chat.
+
 Awareness starts off on first use. After enabling it once, it resumes on ordinary relaunch. Stop persists across restarts and clears the temporary activity trail. The focus check pauses new captures for the composer and password fields or unknown focus reported by Windows accessibility. It cannot identify sensitive content elsewhere on the screen. Use **Stop** before opening confidential material. Locking the Windows session stops the watcher. Raw images travel in memory to the local model. Screen descriptions stay out of Groq chat, SQLite, and exports. The screen result cannot trigger actions. Navigation, searches and app launches require an explicit command. The browser and LM Studio have their own settings and histories.
 
 ## A project workspace that remembers its windows

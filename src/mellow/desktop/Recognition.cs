@@ -101,6 +101,7 @@ namespace MellowDesktop {
             }
         }
         if(text.Equals("why do you think that",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("why do you think i'm doing that",StringComparison.OrdinalIgnoreCase) ||
            text.Equals("what am i doing, and what makes you think that",StringComparison.OrdinalIgnoreCase) ||
            text.Equals("what am i doing, and why",StringComparison.OrdinalIgnoreCase)){
             Recognize("read","");return true;

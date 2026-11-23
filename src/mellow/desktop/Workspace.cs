@@ -156,7 +156,11 @@ namespace MellowDesktop {
     }
     static string DesktopIntent(string message){
         string text=message.Trim().TrimEnd('?');
-        if(text.Equals("what am I doing",StringComparison.OrdinalIgnoreCase) || text.Equals("what am I working on",StringComparison.OrdinalIgnoreCase))return "/activity";
+        if(text.Equals("what am I doing",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("what am I doing right now",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("what am I currently doing",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("what am I doing on my computer",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("what am I working on",StringComparison.OrdinalIgnoreCase))return "/activity";
         if(text.Equals("where was I",StringComparison.OrdinalIgnoreCase))return "/recent-apps";
         if(text.Equals("take me back",StringComparison.OrdinalIgnoreCase))return "/back-to";
         const string back="take me back to ";
@@ -166,6 +170,11 @@ namespace MellowDesktop {
         if(text.Equals("skip this setup",StringComparison.OrdinalIgnoreCase))return "/skip-setup";
         if(text.Equals("start watching my screen",StringComparison.OrdinalIgnoreCase))return "/screen watch";
         if(text.Equals("stop watching my screen",StringComparison.OrdinalIgnoreCase))return "/screen stop";
+        if(text.Equals("can you see my screen",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("can you see what I'm doing",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("what can you see on my screen",StringComparison.OrdinalIgnoreCase) ||
+           text.Equals("what do you see on my screen",StringComparison.OrdinalIgnoreCase))
+            return "/screen ask Describe the focused window and what the user is doing.";
         if(text.Equals("refresh this tab",StringComparison.OrdinalIgnoreCase))return "/browser refresh";
         if(text.Equals("go back in my browser",StringComparison.OrdinalIgnoreCase))return "/browser back";
         if(text.Equals("go forward in my browser",StringComparison.OrdinalIgnoreCase))return "/browser forward";

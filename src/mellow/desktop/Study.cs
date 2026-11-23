@@ -235,7 +235,9 @@ namespace MellowDesktop {
             case "open my study mix":StudyAction("open");return true;
             case "next study mix":StudyAction("next");return true;
             case "what did i listen to":StudyAction("history");return true;
-            case "what's playing":case "what’s playing":StudyMedia("current");return true;
+            case "what's playing":case "what’s playing":
+            case "what am i listening to":case "what am i listening to right now":
+            case "what music am i listening to":StudyMedia("current");return true;
             case "link my study player":StudyMedia("bind");return true;
             case "pause study music":StudyMedia("pause");return true;
             case "resume study music":StudyMedia("play");return true;
