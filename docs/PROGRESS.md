@@ -216,3 +216,7 @@ Owner verified Goal 1 continuity, fresh-chat recall, correction and forgetting u
 ## Goal 2 desktop acceptance build
 
 Owner accepted the revised idle silhouette. Tray controls, poses, transient captions and shared desktop chat are implemented on the Goal 2 branch. See [test steps and scope](GOAL_2_DESKTOP.md). Owner acceptance of the full milestone is pending.
+
+## Desktop edge contact
+
+The floor walk, selected-window perch and screen climb now have Windows renderer checks. The climb follows a planted mitten up either side, transfers the load at the corner, and uses alternating grips for overhead travel. The hat-avatar run measured 916 painted hand contacts at sizes 82, 116 and 156. The largest distance from an edge to the center of a visible mitten pixel was 0.50 display units. A loaded hand's target moved at most 0.49 display units between sampled frames. The shell preserved foreground focus. [Recorded motion](visuals/edge-climb.gif) and [reproduction steps](GOAL_2_DESKTOP.md).

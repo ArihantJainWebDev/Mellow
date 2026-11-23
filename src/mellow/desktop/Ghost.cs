@@ -83,6 +83,7 @@ namespace MellowDesktop {
             scene.Children.Add(new DirectionalLight(Color.FromRgb(187,184,196),new Vector3D(.55,-.85,-.72)));
             scene.Children.Add(new DirectionalLight(Color.FromRgb(66,59,79),new Vector3D(-.8,.1,-.5)));
             scene.Children.Add(parts);
+            CreateGripRig(scene);
             view.Camera=new OrthographicCamera(new Point3D(0,.35,5),new Vector3D(0,0,-1),new Vector3D(0,1,0),2.1);
             view.Children.Add(new ModelVisual3D{Content=scene});
             if(!classic) view.Camera=new OrthographicCamera(new Point3D(0,.89,5),new Vector3D(0,-.06,-1),new Vector3D(0,1,0),2.75);
@@ -110,7 +111,7 @@ namespace MellowDesktop {
             NoticeActivity(now);
             SenseTerrain(now);
             bool attending=state=="idle" && now<attentiveUntil;
-            bool advance=landing || perch!=IntPtr.Zero || guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending);
+            bool advance=edgeMove!=EdgeMove.None || landing || perch!=IntPtr.Zero || guiding || now<nextDodge || (!view.IsMouseOver && state=="idle" && !attending);
             if(advance) pauseAt=double.NaN;
             else if(double.IsNaN(pauseAt)) pauseAt=onFoot?nextFootfall:walkTime;
             if(!moving) walkTime=advance?walkTime+dt:Math.Min(walkTime+dt,Math.Max(walkTime,pauseAt));
@@ -125,9 +126,12 @@ namespace MellowDesktop {
             double attentionAge=now-attentionStarted;
             double nod=attending && attentionAge<.6?3*Math.Sin(Math.PI*attentionAge/.6):0;
             double targetLean=state=="listen"?-8:state=="think"?10:ClimbingFrame?wallDirection*weight*9:climb?weight*9:nod;
+            UpdateGrips(now,dt);
+            targetLean=targetLean*(1-gripWeight)+gripWeight*(gripWall*7*(1-overhead)+overhead*(4*Math.Sin(now*3.2)+3*stride+looseArm*gripWall*12));
             lean+=(targetLean-lean)*blend;
             TurnHead(lean,now);
             double targetYaw=state=="privacy"?166:state=="point"?(pointingLeft?-22:22):ClimbingFrame?wallDirection*52:direction*(onFoot?55*Math.Min(1,weight*4):42*weight);
+            targetYaw=targetYaw*(1-gripWeight)+gripWeight*gripWall*(27-21*overhead);
             double pivot=targetYaw-yaw;
             yaw+=pivot*blend;
             if(state=="privacy" || Math.Abs(pivot)>70) stride+=Math.Sin(yaw*Math.PI/36)*Math.Min(1,Math.Abs(pivot)/35);
@@ -140,6 +144,8 @@ namespace MellowDesktop {
             turn.Children.Add(new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0,1,0),yaw)));
             turn.Children.Add(new ScaleTransform3D(1+spring*.065,1-spring*.16,1,0,-.34,0));
             turn.Children.Add(new TranslateTransform3D(0,hop+(clothGhost==null && !onFoot?.044*Math.Abs(stride):0),0));
+            turn.Children.Add(new TranslateTransform3D(overhead*(.08*Math.Sin(now*3.2)-.14*gripWall*looseArm)*gripWeight,
+                -overhead*.07*gripWeight,0));
             parts.Transform=turn;
             for(int i=0;i<2;i++) {
                 double step=stride*(2*i-1);
@@ -173,9 +179,10 @@ namespace MellowDesktop {
             if(clothGhost!=null){
                 privacyCover+=((state=="privacy" && yaw>110?1:0)-privacyCover)*blend;
                 double elapsed=time.Elapsed.TotalSeconds-trickStart;
-                if(elapsed>=0 && elapsed<15) clothGhost.Animate(elapsed);
-                else clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover,onFoot);
+                if(gripWeight<.001 && elapsed>=0 && elapsed<15) clothGhost.Animate(elapsed);
+                else clothGhost.Animate(0,stride,armLeft,armRight,state=="rest"?.15:blink,glideAmount,privacyCover,onFoot,gripWeight);
             }
+            RenderGrips(now);
             if(onFoot && !moving && state!="privacy" && time.Elapsed.TotalSeconds-trickStart>=15)
                 PlantFeet(hop);
         }
@@ -331,7 +338,7 @@ namespace MellowDesktop {
             if(verify) keptFocus &= foreground==GetForegroundWindow();
             if(verify && frames==12 && preview!=null && preview.EndsWith("-sheet.png")) RenderCharacterSheet(preview);
             else if(verify && frames==12 && !String.IsNullOrEmpty(preview) && preview.EndsWith(".gif",StringComparison.OrdinalIgnoreCase)) {
-                if(!preview.EndsWith("-walk.gif",StringComparison.OrdinalIgnoreCase)) CaptureMotion(preview);
+                if(!preview.EndsWith("-walk.gif",StringComparison.OrdinalIgnoreCase) && !preview.EndsWith("-climb.gif",StringComparison.OrdinalIgnoreCase)) CaptureMotion(preview);
             } else if(verify && frames==12 && !String.IsNullOrEmpty(preview)) {
                 var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(116,116,96,96,PixelFormats.Pbgra32);
                 var drawing=new DrawingVisual();
@@ -356,6 +363,7 @@ namespace MellowDesktop {
                 if(verifyChat!="1" && !moving){
                     VerifyWalk();
                     VerifyPerch();
+                    VerifyEdgeGrips();
                     // Exercise an actual vertical route through the same interpolator as the timer.
                     var bounds=Bounds();
                     Travel(new Point(window.Left,bounds.Top),0,true);

@@ -141,7 +141,8 @@ namespace MellowDesktop {
     void Land(double clock) {
         landing=descending=false;climb=false;travel=0;
         origin=destination=new Point(window.Left,Bounds().Bottom);
-        window.Top=destination.Y;holdUntil=clock+2;reactionAt=lastTick;reaction=.65;quickDrop=false;
+        window.Top=destination.Y;pathStage=4;holdUntil=clock+3+random.NextDouble()*3;reactionAt=lastTick;reaction=.65;quickDrop=false;
+        if(climbAfterLanding){climbAfterLanding=false;RequestEdgeClimb();}
     }
  }
 }

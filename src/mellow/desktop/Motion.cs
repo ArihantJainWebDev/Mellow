@@ -37,9 +37,10 @@ namespace MellowDesktop {
         Rect Bounds() {
             var a=SystemParameters.WorkArea;
             // The transparent caption space sits above the model's crown.
-            double top=a.Top-(window.Height-size);
-            double margin=perch==IntPtr.Zero && !landing?0:Math.Max(0,window.Width*.5-size*.22);
-            return new Rect(a.Left-margin,top,Math.Max(0,a.Width-window.Width+2*margin),Math.Max(0,(double.IsNaN(floorY)?a.Bottom:floorY)-window.Height+FootInset-top));
+            double top=(edgeMove==EdgeMove.None?a.Top:-size*.055)-(window.Height-size);
+            double margin=perch==IntPtr.Zero && !landing && edgeMove==EdgeMove.None?0:Math.Max(0,window.Width*.5-size*(edgeMove==EdgeMove.None?.22:.36));
+            double left=edgeMove==EdgeMove.None?a.Left:0, width=edgeMove==EdgeMove.None?a.Width:SystemParameters.PrimaryScreenWidth;
+            return new Rect(left-margin,top,Math.Max(0,width-window.Width+2*margin),Math.Max(0,(double.IsNaN(floorY)?a.Bottom:floorY)-window.Height+FootInset-top));
         }
         double walkDuration, riseDuration;
         int stepCount, swingFoot;
@@ -76,7 +77,8 @@ namespace MellowDesktop {
             nextFootfall=departure+(downFirst+landingTime*walkDuration)*travel/(walkDuration+riseDuration);
             return (swingFoot==1?1:-1)*arc;
         }
-        void Travel(Point next,double clock,bool vertical,bool falling=false) {
+        void Travel(Point next,double clock,bool vertical,bool falling=false,EdgeMove edge=EdgeMove.None) {
+            edgeMove=edge;climbAfterLanding=false;
             if(landing && !falling) descending=false;
             landing=falling;
             var b=Bounds();origin=new Point(window.Left,window.Top);
@@ -86,6 +88,11 @@ namespace MellowDesktop {
             walkDuration=horizontal<.01?0:Math.Max(.34,horizontal/(size*.49));
             riseDuration=Math.Abs(destination.Y-origin.Y)/115;
             travel=descending && !guiding?Math.Max(.45,(destination-origin).Length/155):Math.Max(.45,walkDuration+riseDuration);
+            if(edge==EdgeMove.Ascend || ClimbingFrame) {
+                riseDuration=Math.Abs(destination.Y-origin.Y)/(size*.53);
+                travel=Math.Max(.55,.30+riseDuration);
+            }
+            if(edge==EdgeMove.Traverse)travel=.45+horizontal/(size*.48);
             departure=clock;climb=vertical;
         }
         void PointAtControl() {
@@ -114,15 +121,18 @@ namespace MellowDesktop {
                 if(guiding){CancelTarget();pathStage=0;}
                 Point next;
                 descending=false;
-                switch(pathStage++%5){
-                    case 0: next=new Point(destination.X<b.Left+b.Width/2?b.Left:b.Right,destination.Y);break;
-                    case 1: next=new Point(destination.X,b.Top);break;
-                    case 2: next=new Point(b.Left+b.Width*(.15+.7*random.NextDouble()),b.Top);break;
-                    case 3: descending=true;next=new Point(b.Left+b.Width*(.25+.5*random.NextDouble()),b.Bottom);break;
-                    default: next=new Point(b.Right-offset,b.Bottom-lift);break;
+                int stage=pathStage++%5;
+                if(stage==0 || stage==1 || stage==2) {
+                    StartEdgeLeg(stage==0?EdgeMove.Approach:stage==1?EdgeMove.Ascend:EdgeMove.Traverse,clock);
+                    b=Bounds();
+                } else if(stage==3) {
+                    ReleaseEdge(clock);
+                    b=Bounds();
+                } else {
+                    next=new Point(b.Right-offset,b.Bottom);
+                    Travel(next,clock,false);
+                    holdUntil=clock+travel+2+random.NextDouble()*4;
                 }
-                Travel(next,clock,pathStage%5==2);
-                holdUntil=clock+travel+2+random.NextDouble()*4;
             }
             onFoot=false;
             if(moving){step=weight=0;direction=1;return;}
@@ -150,10 +160,15 @@ namespace MellowDesktop {
                     origin.Y+(destination.Y-origin.Y)*reach-size*.065*Math.Sin(Math.PI*pull));
                 onFoot=false;
             }
-            if(ClimbingFrame && travel>0) {
+            if((edgeMove==EdgeMove.Ascend || ClimbingFrame) && travel>0) {
                 double pulls=Math.Max(1,Math.Round(Math.Abs(destination.Y-origin.Y)/(size*.17)));
-                double phase=Ease(u)*pulls,stroke=phase-Math.Floor(phase);
+                double phase=Clamp((clock-departure-.30)/Math.Max(.01,travel-.30),0,1)*pulls,stroke=phase-Math.Floor(phase);
                 pos.Y=origin.Y+(destination.Y-origin.Y)*(Math.Floor(phase)+Ease(stroke))/pulls;
+            }
+            if(edgeMove==EdgeMove.Traverse){
+                double swing=Clamp((clock-departure-.45)/Math.Max(.01,travel-.45),0,1);
+                pos.X=origin.X+(destination.X-origin.X)*Ease(swing);
+                onFoot=false;
             }
             if(umbrellaRide && !landing)pos.X+=Math.Sin(u*4*Math.PI)*Math.Sin(u*Math.PI)*18;
             pos.X=Clamp(pos.X,b.Left,b.Right);pos.Y=Clamp(pos.Y,b.Top,b.Bottom);

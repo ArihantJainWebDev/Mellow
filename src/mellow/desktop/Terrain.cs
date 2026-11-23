@@ -60,7 +60,7 @@ namespace MellowDesktop {
         if(perch!=IntPtr.Zero) UpdatePerch(now,GetForegroundWindow());
         if(target!=null) RefreshTarget();
         UpdateProgress(now);
-        if(!landing && perch==IntPtr.Zero && !moving && !guiding && now>=nextDodge && state!="privacy" &&
+        if(!landing && edgeMove==EdgeMove.None && perch==IntPtr.Zero && !moving && !guiding && now>=nextDodge && state!="privacy" &&
            Forms.Control.MouseButtons==Forms.MouseButtons.Left && view.IsMouseOver){
             nextDodge=now+2;LeavePerch();
             var b=Bounds();double side=window.Left<b.Left+b.Width/2?1:-1;

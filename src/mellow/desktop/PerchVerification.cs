@@ -32,6 +32,7 @@ namespace MellowDesktop {
                     double step,weight,direction;
                     Navigate(walkTime,out step,out weight,out direction);
                     if(ClimbingFrame && weight>.4) {
+                        if(!sawClimb)VerifyFrameGrip(walkTime,step,weight,direction);
                         sawClimb=true;
                         if(Math.Abs(window.Left-WallX(VisibleFrame(handle)))>2)
                             throw new InvalidOperationException("Climb left the side of the window.");

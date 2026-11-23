@@ -17,7 +17,7 @@ if ($HatTrick) {
     [MellowDesktop.HatTheatre]::Run($Preview)
     return
 }
-Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot Character.cs),(Join-Path $PSScriptRoot Terrain.cs),(Join-Path $PSScriptRoot Perch.cs),(Join-Path $PSScriptRoot PerchVerification.cs),(Join-Path $PSScriptRoot RegionVision.cs),(Join-Path $PSScriptRoot Checkpoint.cs),(Join-Path $PSScriptRoot HatTheatre.cs)) -ReferencedAssemblies $references
+Add-Type -Path @((Join-Path $PSScriptRoot Ghost.cs),(Join-Path $PSScriptRoot Desktop.cs),(Join-Path $PSScriptRoot Motion.cs),(Join-Path $PSScriptRoot EdgeGrip.cs),(Join-Path $PSScriptRoot GripVerification.cs),(Join-Path $PSScriptRoot Character.cs),(Join-Path $PSScriptRoot Terrain.cs),(Join-Path $PSScriptRoot Perch.cs),(Join-Path $PSScriptRoot PerchVerification.cs),(Join-Path $PSScriptRoot RegionVision.cs),(Join-Path $PSScriptRoot Checkpoint.cs),(Join-Path $PSScriptRoot HatTheatre.cs)) -ReferencedAssemblies $references
 $closeSignal = $null
 if ($env:MELLOW_CLOSE_EVENT) {
     $closeSignal = [Threading.EventWaitHandle]::OpenExisting($env:MELLOW_CLOSE_EVENT)

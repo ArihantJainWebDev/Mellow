@@ -122,7 +122,7 @@ namespace MellowDesktop {
     }
     internal Model3DGroup[] Feet {get {return feet;}}
     internal Model3DGroup Model {get {return actor;}}
-    internal void Animate(double t,double? desktopStep=null,double left=0,double right=0,double blink=1,double glide=0,double cover=0,bool groundedWalk=false){
+    internal void Animate(double t,double? desktopStep=null,double left=0,double right=0,double blink=1,double glide=0,double cover=0,bool groundedWalk=false,double climbingSleeve=0){
         // Return through the pickup poses at the end so the loop joins cleanly.
         double s=t<=9?t:Math.Max(0,9-(t-9)*1.5);
         double walk=Beat(s,0,2),step=desktopStep??Math.Sin(4*P*walk),bob=.044*Math.Abs(step);
@@ -154,6 +154,8 @@ namespace MellowDesktop {
             p.X-=side*w*.64*cover;p.Y+=w*.41*cover;p.Z+=w*.42*cover;
             // The supporting leg straightens while the opposite shoe clears the hem.
             if(groundedWalk) p.Y+=hem*(.065*Math.Abs(step)+.12*knee);
+            // Draw the sleeve root inward as its extended climbing sleeve takes the load.
+            p.X-=side*w*.31*climbingSleeve;p.Y-=w*.55*gesture*climbingSleeve;
             fabric.Add(p);
         }
         sheet.Positions=fabric;

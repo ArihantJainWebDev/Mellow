@@ -25,11 +25,13 @@ A clean install built the 0.2.0rc1 wheel and passed 49 tests. A Windows smoke ru
 
 ## Screen movement and attention
 
-The ghost can walk to a side, climb to the upper edge and float across the primary work area. Right-click and select **Climb to the top edge** for an immediate route. Its head, shoulder angles and mouth blend toward each pose over several frames. Activity outside chat uses a Windows last-input timestamp and a stationary pointer as an approximate typing cue. It reads no characters. To point, hover over an accessible button or hyperlink and press Ctrl+Alt+P, or use the delayed menu action. Only the target type and bounds are used locally. Unexposed controls cannot be identified this way.
+Right-click **Climb to the top edge**. Mellow walks to the nearer side of the primary screen. His mittens alternate fixed holds as his body rises. At the corner one hand keeps the wall while the other hooks over the top. He takes his weight on one arm, reaches back up, travels sideways along the rim, then opens his umbrella and returns to the floor. **Leave ledge** releases the grip early. The regular roaming route uses the same sequence. [Watch the desktop renderer perform the climb](visuals/edge-climb.gif). Its head, shoulder angles and mouth blend toward each pose over several frames. Activity outside chat uses a Windows last-input timestamp and a stationary pointer as an approximate typing cue. It reads no characters. To point, hover over an accessible button or hyperlink and press Ctrl+Alt+P, or use the delayed menu action. Only the target type and bounds are used locally. Unexposed controls cannot be identified this way.
 
 Use the [character behavior brief](CHARACTER_BEHAVIOR.md) to review timing, body language and how Mellow interacts with the desktop.
 
 Right-click **Walk along the floor** to replay a short walk. On level travel each foot alternately stays on a fixed desktop point while the other swings forward. The hem rises over the swinging shoe and Mellow settles the current step when hovering or typing pauses a walk. A guided journey with a height change separates horizontal travel from the elevation change. The umbrella descent keeps its own motion. [Watch the rendered walk in both directions](visuals/grounded-walk.gif).
+
+The Windows renderer check exercises left and right climbs at 82, 116 and 156 display units. It temporarily colors each mitten separately to measure visible contact on the real overlay, checks whether a planted grip slides and follows the route through landing. To reproduce from the project root, run `powershell -NoProfile -STA -ExecutionPolicy Bypass -File src/mellow/desktop/avatar.ps1 -Verify`. The optional `-Preview PATH-climb.gif` records the sequence. The check briefly displays the avatar and disposable test windows.
 
 ## Desktop signals and one-shot vision
 

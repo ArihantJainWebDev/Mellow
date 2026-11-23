@@ -114,8 +114,8 @@ namespace MellowDesktop {
             menu.Items.Add("Open project checkpoint…",null,delegate {OpenCheckpoint();});
             menu.Items.Add("Perch on a window",null,delegate {Later(delegate {SelectWindow(false);});});
             menu.Items.Add("Watch a progress bar",null,delegate {Later(WatchProgress);});
-            menu.Items.Add("Dismiss / stop watching",null,delegate {dismissed=true;progressElement=null;if(perch!=IntPtr.Zero) DropFromPerch();CancelTarget();Signal("idle","",0);});
-            menu.Items.Add("Leave ledge",null,delegate {if(perch!=IntPtr.Zero) DropFromPerch();});
+            menu.Items.Add("Dismiss / stop watching",null,delegate {dismissed=true;progressElement=null;if(perch!=IntPtr.Zero) DropFromPerch();else if(edgeMove!=EdgeMove.None) ReleaseEdge(walkTime);CancelTarget();Signal("idle","",0);});
+            menu.Items.Add("Leave ledge",null,delegate {if(perch!=IntPtr.Zero) DropFromPerch();else if(edgeMove!=EdgeMove.None)ReleaseEdge(walkTime);});
             menu.Items.Add("Close a window…",null,delegate {Later(delegate {SelectWindow(true);});});
             menu.Items.Add("Chat with Mellow",null,delegate {OpenChat();});
             menu.Items.Add("Move ghost (drag it once)",null,delegate {window.Show();LeavePerch();CancelTarget(); moving=true; SetPassive(false);});
@@ -134,17 +134,30 @@ namespace MellowDesktop {
                 holdUntil=walkTime+travel+3;Signal("idle","",0);
             });
             menu.Items.Add("Climb to the top edge",null,delegate {
-                LeavePerch();CancelTarget();var b=Bounds();pathStage=1;
-                Travel(new Point(window.Left<b.Left+b.Width/2?b.Left:b.Right,window.Top),walkTime,false);
-                holdUntil=walkTime+travel+.2;Signal("idle","",0);
+                RequestEdgeClimb();
             });
             window.Loaded+=delegate {if(!verify) Signal("offer","Click to chat. Right-click for controls.",7);};
             foreach(int n in new int[]{82,116,156}) {
                 int pixels=n;
                 menu.Items.Add("Size "+pixels,null,delegate {var oldFloor=Bounds().Bottom;
                     bool standing=Math.Abs(window.Top-oldFloor)<1 && !guiding && perch==IntPtr.Zero;
+                    double oldWidth=window.Width;
                     size=pixels;LayoutAvatar();
                     if(standing){double delta=Bounds().Bottom-oldFloor;origin.Y+=delta;destination.Y+=delta;window.Top+=delta;}
+                    if(edgeMove==EdgeMove.Approach){
+                        var b=Bounds();
+                        Travel(new Point(gripWall<0?b.Left:b.Right,b.Bottom),walkTime,false,edge:EdgeMove.Approach);
+                        holdUntil=walkTime+travel+.22;
+                    }
+                    if(edgeMove==EdgeMove.Ascend || edgeMove==EdgeMove.Traverse){
+                        var b=Bounds();
+                        double dx=edgeMove==EdgeMove.Traverse?(oldWidth-window.Width)*.5:
+                            (gripWall<0?b.Left:b.Right)-window.Left;
+                        origin.X+=dx;destination.X+=dx;window.Left+=dx;
+                        double dy=b.Top-destination.Y;
+                        destination.Y+=dy;
+                        if(edgeMove==EdgeMove.Traverse || walkTime>=departure+travel){origin.Y+=dy;window.Top+=dy;}
+                    }
                     SavePosition();});
             }
             var mute=new Forms.ToolStripMenuItem("Quiet (hide bubbles)"){CheckOnClick=true};
